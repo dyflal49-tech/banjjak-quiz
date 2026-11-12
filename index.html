@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<base href="/banjjak-quiz/">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cut">
+<meta name="theme-color" content="#46178f">
+<title>반짝퀴즈 · 교실 퀴즈 게임</title>
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="modes.css">
+<link rel="stylesheet" href="studio.css">
+<link rel="stylesheet" href="live.css">
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js" defer></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js" defer></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js" defer></script>
+<script src="common.js" defer></script>
+<script src="engine.js" defer></script>
+<script src="backend.js" defer></script>
+<script src="modes.js" defer></script>
+<script src="studio.js" defer></script>
+<script src="live.js" defer></script>
+</head>
+<body>
+<a class="sr-only" href="#app">본문으로 건너뛰기</a>
+<div id="app" tabindex="-1"><div class="boot purple-bg"><div class="logo-big">반짝퀴즈</div><p>불러오는 중…</p></div></div>
+<div id="modal-root"></div>
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+<noscript>반짝퀴즈는 JavaScript가 필요합니다.</noscript>
+</body>
+</html>
