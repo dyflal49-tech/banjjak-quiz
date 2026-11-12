@@ -509,7 +509,7 @@
         el('span', { class: 'st-address-label' }, '학생은 이 주소로 접속'),
         el('div', { class: 'st-address-url' }, addr),
         others.length ? el('div', { class: 'small muted' }, '다른 주소: ' + others.join(', ')) : null,
-        el('p', { class: 'small muted' }, '같은 Wi-Fi에 연결된 기기에서 접속하고, 게임을 시작하면 나오는 PIN을 입력해요.')),
+        el('p', { class: 'small muted' }, (KQ.me && KQ.me.firebase ? '인터넷이 되는 기기라면 어디서든 접속할 수 있어요. 게임을 시작하면 나오는 PIN을 입력해요.' : '같은 Wi-Fi에 연결된 기기에서 접속하고, 게임을 시작하면 나오는 PIN을 입력해요.'))),
       btn([icon('copy'), '주소 복사'], () => copyText(addr), 'ghost small'));
     KQ.render(el('div', { class: 'st-dash' }, teacherTopbar('dash'),
       el('main', { class: 'page stack' },
