@@ -184,10 +184,11 @@
     const g = h.g;
     return { pin: g.pin, quizId: g.quizId, quizTitle: g.quizTitle, mode: g.mode, modeName: g.modeName, pacing: g.pacing, options: g.options, questions: g.questions, phase: g.phase, locked: g.locked, createdAt: g.createdAt,
       qIndex: g.qIndex, endsAt: g.endsAt, startAt: g.startAt, players: [...g.players.values()], kicked: [...g.kicked], answers: [...g.answers.values()], stats: g.stats, feed: g.feed, teams: g.teams, ms: g.ms, reportId: g.reportId, resultSeq: g.resultSeq,
-      lastTs: h.lastTs, processed: [...h.processed].slice(-1500) };
+      autoAt: g.autoAt || null, lastTs: h.lastTs, processed: [...h.processed].slice(-1500) };
   }
   function restore(s) {
-    const g = { ...s, players: new Map(s.players.map(p => [p.id, p])), kicked: new Set(s.kicked), answers: new Map(s.answers.map(a => [a.playerId, a])), clients: new Set(), timer: null, touched: Date.now() };
+    const g = { ...s, players: new Map(s.players.map(p => [p.id, p])), kicked: new Set(s.kicked), answers: new Map(s.answers.map(a => [a.playerId, a])), clients: new Set(), timer: null, autoTimer: null, touched: Date.now() };
+    if (!g.options || g.options.autoAdvance === undefined) g.options = { ...(g.options || {}), autoAdvance: 0 };
     for (const p of g.players.values()) if (p.finishedRank === undefined) p.finishedRank = null;
     delete g.lastTs; delete g.processed;
     E.games.set(g.pin, g);
@@ -195,6 +196,7 @@
     if (g.phase === 'countdown') E.setTimer(g, left, () => (g.pacing === 'host' ? E.startQuestion(g) : E.startRun(g)));
     else if (g.phase === 'question') E.setTimer(g, left, () => E.reveal(g));
     else if (g.phase === 'running') E.setTimer(g, left, () => E.finish(g));
+    else if (['reveal', 'leaderboard'].includes(g.phase) && s.autoAt) E.scheduleAuto(g, s.autoAt - Date.now());
     return g;
   }
   function handle(h, docId, d) {
@@ -202,8 +204,8 @@
     try {
       if (!u) fail(400, '잘못된 요청이에요.');
       if (d.type === 'join') {
-        const p = E.joinGame(g, u, d.nickname); p.conns = 1;
-        reply = { ok: true, body: { me: { id: p.id, nickname: p.nickname, team: p.team, teamName: g.teams ? g.teams[p.team].name : null } } };
+        const p = E.joinGame(g, u, d.nickname, d.avatar); p.conns = 1;
+        reply = { ok: true, body: { me: { id: p.id, nickname: p.nickname, team: p.team, teamName: g.teams ? g.teams[p.team].name : null, avatar: p.avatar || null } } };
       } else {
         const p = [...g.players.values()].find(x => x.deviceKey === u);
         if (!p) fail(403, g.kicked.has(u) ? '진행자가 이 기기를 게임에서 내보냈어요.' : '먼저 게임에 참가하세요.');
@@ -254,7 +256,7 @@
   async function closeHost(pin) {
     const h = hosts.get(pin); const g = (h && h.g) || E.games.get(pin);
     if (h) { h.closed = true; try { h.unsub && h.unsub(); } catch {} clearInterval(h.lockT); clearTimeout(h.flushT); clearTimeout(h.pubT); clearTimeout(h.snapT); hosts.delete(pin); }
-    if (g) { E.clearTimer(g); E.games.delete(pin); }
+    if (g) { E.clearTimer(g); E.clearAuto(g); E.games.delete(pin); }
     const b = fdb.batch(); b.delete(gameRef(pin)); b.delete(gameRef(pin).collection('private').doc('engine')); await b.commit();
   }
   window.addEventListener('beforeunload', e => { for (const h of hosts.values()) if (!['lobby', 'finished'].includes(h.g.phase)) { flush(h); e.preventDefault(); e.returnValue = ''; } });
@@ -322,7 +324,7 @@
     if (me) { const idx = (gd.players || []).findIndex(p => p.id === me.id); me.rank = idx >= 0 ? idx + 1 : (gd.playerCount || 1); me.playerCount = gd.playerCount || 1; }
     return {
       role: 'player', pin: String(pin), mode: gd.mode, modeName: gd.modeName, pacing: gd.pacing, phase: gd.phase, serverNow: Date.now(), quizTitle: gd.quizTitle,
-      kicked: !!(pd && pd.kicked), endsAt: gd.endsAt, modeState: gd.modeState || {}, me,
+      kicked: !!(pd && pd.kicked), endsAt: gd.endsAt, autoAt: gd.autoAt || null, modeState: gd.modeState || {}, me,
       question: fresh ? pd.question : null, answered: fresh ? !!pd.answered : false, lockedUntil: pd ? pd.lockedUntil : null,
       result: fresh || gd.pacing === 'player' ? (pd && pd.result) || null : null, actions: fresh ? pd.actions : null, questionStartedAt: pd ? pd.questionStartedAt : null,
       leaderboard: gd.mode === 'classic' && ['leaderboard', 'finished'].includes(gd.phase) ? gd.leaderboard || [] : [], podium: gd.phase === 'finished' ? gd.podium || [] : []
@@ -465,12 +467,13 @@
         else if (a === 'skip') { if (g.phase === 'question') E.reveal(g); else if (g.phase === 'countdown' && g.pacing === 'host') { E.clearTimer(g); E.startQuestion(g); } }
         else if (a === 'lock' || a === 'unlock') { g.locked = a === 'lock'; E.HOOKS.touch(g); }
         else if (a === 'kick') { const pl = g.players.get(String(d.playerId)); if (!pl) fail(404, '참가자를 찾을 수 없어요.'); g.kicked.add(pl.deviceKey); g.players.delete(pl.id); g.answers.delete(pl.id); if (g.phase === 'question' && E.expectedPlayers(g).length && g.answers.size >= E.expectedPlayers(g).length) E.reveal(g); E.HOOKS.touch(g); }
+        else if (a === 'settings') E.applySettings(g, (d && d.options) || {});
         else if (a === 'end') E.finish(g);
         else if (a === 'close') { await closeHost(pin); return { ok: true }; }
         else fail(400, '알 수 없는 진행 명령이에요.');
         flush(h); return { ok: true, phase: g.phase };
       }
-      if (action === 'join') return request(pin, 'join', { nickname: E.clean(d && d.nickname, 15) });
+      if (action === 'join') return request(pin, 'join', { nickname: E.clean(d && d.nickname, 15), avatar: E.normAvatar(d && d.avatar) });
       if (action === 'answer') return request(pin, 'answer', { questionId: String(d.questionId || ''), answer: d.answer === undefined ? null : d.answer });
       if (action === 'action') return request(pin, 'action', { kind: String(d.kind || ''), target: d.target === undefined ? null : d.target });
     }

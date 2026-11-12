@@ -402,3 +402,185 @@
 @media (prefers-reduced-motion:reduce){
   .lv-pod-who{opacity:1}
 }
+
+/* =====================================================================
+   v2: 캐릭터, QR 입장, 진행 설정, 자동 넘김, 결과 효과
+   ===================================================================== */
+/* 캐릭터 (KQ.avatar.render 결과를 감싸는 동그라미, 없으면 이니셜) */
+.lv-av{display:inline-flex;align-items:center;justify-content:center;border-radius:50%;flex:0 0 auto;overflow:hidden;line-height:1;vertical-align:middle;position:relative}
+.lv-av > svg,.lv-av > img{width:100%!important;height:100%!important;display:block}
+.lv-av-fallback{color:#fff;font-weight:900;box-shadow:inset 0 -4px 0 rgba(0,0,0,.18);border:3px solid rgba(255,255,255,.85);box-sizing:border-box}
+.lv-av-fallback > svg{width:50%!important;height:50%!important}
+
+/* 학생 상단 바 */
+.lv-pbar-who{flex:1;min-width:0;display:flex;align-items:center;justify-content:center;gap:8px}
+.lv-pbar-who .lv-pbar-name{flex:0 1 auto}
+.lv-pbar-av{display:inline-flex;flex:0 0 auto}
+.lv-pbar-av:empty{display:none}
+.lv-pbar-score{font-variant-numeric:tabular-nums}
+
+/* 닉네임 + 캐릭터 */
+.lv-join-inner{max-width:440px;gap:12px}
+.lv-join-card{gap:10px}
+.lv-join-form{display:flex;flex-direction:column;gap:8px}
+.lv-field-label{font-weight:900;margin-top:2px}
+.lv-av-section{border-top:2px dashed var(--line);padding-top:10px;display:flex;flex-direction:column;gap:6px;min-width:0;max-width:100%;overflow-x:auto}
+.lv-av-section > *{max-width:100%;min-width:0}
+.lv-join-inner,.lv-join-card{min-width:0;max-width:100%}
+.lv-av-h{font-size:1.1rem;margin:0;text-align:center}
+.lv-join-ok{margin-top:2px}
+.lv-av-modal .modal-body{padding:12px}
+@media (max-width:420px){
+  .lv-join-inner .lv-home-logo{font-size:34px}
+  .lv-player.lv-full .lv-pmain{padding:10px 8px}
+  .lv-join-card{padding:12px}
+}
+
+/* 학생 로비 */
+.lv-p-lobby-av{margin-top:6px;filter:drop-shadow(0 6px 0 rgba(0,0,0,.2))}
+.lv-p-lobby-av .lv-av{animation:lv-bob 2.4s ease-in-out .4s infinite}
+.lv-av-change{margin:2px 0 4px}
+
+/* 학생: 곧 다음 문제 */
+.lv-pauto{display:flex;align-items:center;gap:10px;width:100%;max-width:520px;margin:0 auto 12px;padding:0 16px;font-weight:900;font-size:.95rem}
+.lv-pauto-text{flex:0 0 auto}
+.lv-pauto-track{flex:1;height:10px;border-radius:5px;background:rgba(255,255,255,.3);overflow:hidden}
+.lv-pauto-fill{display:block;height:100%;background:#fff;transform-origin:left;transition:transform .25s linear}
+.lv-bg-light .lv-pauto-track{background:rgba(70,23,143,.18)}
+.lv-bg-light .lv-pauto-fill{background:var(--purple)}
+
+/* 학생 결과 효과 */
+.lv-res-pop{animation:lv-stamp-in .55s cubic-bezier(.2,1.6,.4,1) both}
+.lv-points{display:inline-flex;gap:2px;font-variant-numeric:tabular-nums}
+.lv-streak-hot{animation:lv-badge-in .5s cubic-bezier(.2,1.6,.4,1) .3s both}
+.lv-streak-hot .lv-flame{animation:lv-flicker .35s ease-in-out infinite alternate;transform-origin:50% 100%}
+.lv-streak.fire{background:linear-gradient(90deg,#ffe066,#ff922b);color:#6b1a00;box-shadow:0 0 0 4px rgba(255,212,59,.45),0 0 22px rgba(255,146,43,.85);animation:lv-badge-in .5s cubic-bezier(.2,1.6,.4,1) .3s both,lv-glow-fire 1s ease-in-out .9s infinite alternate}
+.lv-streak.fire .lv-flame{width:18px;height:24px}
+.lv-streak.blaze{font-size:1.15em;padding:8px 20px}
+.lv-rankup{display:inline-flex;align-items:center;gap:6px;background:#ffd43b;color:#5c3d00;border-radius:999px;padding:6px 18px;font-weight:900;font-size:1.1rem;margin-top:10px;box-shadow:0 4px 0 rgba(0,0,0,.2);animation:lv-rankup 1s cubic-bezier(.2,1.4,.4,1) .6s both}
+.lv-rankup .lv-up-ico{animation:lv-up-bounce .8s ease-in-out 1.4s infinite}
+.lv-cheer{font-weight:900;font-size:1.15rem;background:rgba(255,255,255,.18);border-radius:10px;padding:8px 16px;margin:4px 0;animation:lv-fade-up .5s ease-out .35s both}
+.lv-res-icon.lv-res-poll{color:#d89e00}
+.lv-shake{animation:lv-shake .5s ease-in-out}
+
+/* 학생 최종 */
+.lv-fin-me{position:relative;display:flex;align-items:center;justify-content:center;margin:6px 0 2px}
+.lv-fin-me .lv-fin-av{box-shadow:0 6px 0 rgba(0,0,0,.22);animation:lv-bob 2.4s ease-in-out infinite}
+.lv-fin-top .lv-fin-me .lv-fin-av{box-shadow:0 0 0 5px #ffd43b,0 0 34px rgba(255,212,59,.8)}
+.lv-medal{position:absolute;right:-40px;bottom:-12px;width:64px;height:86px}
+.lv-medal-ribbon{position:absolute;left:50%;top:0;width:30px;height:36px;transform:translateX(-50%);background:linear-gradient(90deg,#e21b3c 0 50%,#1368ce 50%);clip-path:polygon(0 0,100% 0,100% 100%,50% 75%,0 100%)}
+.lv-medal-disc{position:absolute;left:4px;bottom:0;width:56px;height:56px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:1.6rem;color:#5c3d00;background:radial-gradient(circle at 35% 30%,#fff6bf,#f2c230 45%,#b37f00);box-shadow:inset 0 0 0 4px rgba(255,255,255,.5),0 4px 0 rgba(0,0,0,.25);animation:lv-medal-spin 2.4s ease-in-out .3s infinite}
+.lv-medal.silver .lv-medal-disc{background:radial-gradient(circle at 35% 30%,#fff,#cfd4de 45%,#7d8596);color:#2b2b2b}
+.lv-medal.bronze .lv-medal-disc{background:radial-gradient(circle at 35% 30%,#ffe2c4,#e09a62 45%,#8a4a1e);color:#3d1d00}
+.lv-praise{font-size:1.25rem;font-weight:900;margin:2px 0 0}
+.lv-praise-sub{margin:0;opacity:.92;font-weight:700}
+.lv-fin-top .lv-fin-rank{color:#ffd43b;text-shadow:0 4px 0 rgba(0,0,0,.25),0 0 24px rgba(255,212,59,.7)}
+.lv-final-num{font-variant-numeric:tabular-nums}
+.lv-mini-pod .lv-mini-av{margin-bottom:2px}
+.lv-top5-av{margin:-2px 0}
+
+/* 진행자 로비: QR 띠 */
+.lv-join-band.has-qr{align-items:stretch;flex-wrap:nowrap}
+.lv-join-qr{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:8px 14px;border-right:3px solid var(--line);flex:0 0 auto}
+.lv-join-qr img{width:clamp(110px,23vh,190px)!important;height:auto!important;aspect-ratio:1;display:block;image-rendering:pixelated}
+.lv-join-qr-cap{font-weight:800;color:#555;font-size:.72em}
+.lv-qr-missing{display:block;max-width:170px;font-size:.78em;color:#555;font-weight:700;text-align:center}
+.lv-join-info{display:flex;flex-direction:column;justify-content:center;min-width:0}
+.lv-join-band.has-qr .lv-join-url{border-right:0;border-bottom:3px solid var(--line);padding:8px 24px}
+.lv-join-band.has-qr .lv-join-pin{padding:6px 24px 10px}
+.lv-join-band.has-qr .lv-join-addr{font-size:clamp(18px,2.3vw,36px)}
+.lv-join-band.has-qr .lv-join-pin-num{font-size:clamp(44px,6.4vw,96px)}
+@media (max-width:700px){.lv-join-band.has-qr{flex-wrap:wrap}.lv-join-qr{border-right:0;border-bottom:3px solid var(--line);width:100%}}
+
+/* 진행자 로비: 캐릭터 칩 */
+.lv-chip{display:inline-flex;align-items:center;gap:8px;padding:5px 14px 5px 5px}
+.lv-chip-av{display:inline-flex;flex:0 0 auto}
+.lv-chip-pop{animation:lv-chip-pop .6s cubic-bezier(.2,1.6,.4,1) both}
+.lv-team-col .lv-chip{padding:4px 12px 4px 4px}
+
+/* 큰 QR 창 */
+.lv-qr-big{display:flex;gap:28px;align-items:center;justify-content:center;flex-wrap:wrap}
+.lv-qr-box{background:#fff;padding:10px;border-radius:12px;box-shadow:0 0 0 3px var(--line)}
+.lv-qr-box img{width:min(360px,62vh,72vw)!important;height:auto!important;display:block;image-rendering:pixelated}
+.lv-qr-info{display:flex;flex-direction:column;gap:2px;min-width:0;max-width:440px}
+.lv-qr-label{margin:8px 0 0;font-weight:800;color:#555}
+.lv-qr-addr{font-size:1.5rem;font-weight:900;overflow-wrap:anywhere;color:var(--purple)}
+.lv-qr-pin{font-size:clamp(44px,7vw,72px);font-weight:900;letter-spacing:.05em;line-height:1}
+
+/* 진행 설정 창 */
+.lv-set-modal [hidden]{display:none!important}
+.lv-set-sec{border-bottom:2px solid var(--line);padding:4px 0 14px;margin-bottom:12px;display:flex;flex-direction:column;gap:8px}
+.lv-set-sec:last-child{border-bottom:0;margin-bottom:0;padding-bottom:0}
+.lv-set-sec h3{margin:0;font-size:1.05rem}
+.lv-seg{display:inline-flex;flex-wrap:wrap;border:2px solid var(--purple);border-radius:10px;overflow:hidden;align-self:flex-start}
+.lv-seg-btn{border:0;border-right:2px solid var(--purple);background:#fff;color:var(--purple);font:inherit;font-weight:900;padding:8px 16px;min-width:64px;min-height:44px;cursor:pointer}
+.lv-seg-btn:last-child{border-right:0}
+.lv-seg-btn:hover{background:#f4effc}
+.lv-seg-btn.on{background:var(--purple);color:#fff}
+.lv-seg-btn:focus-visible{outline:3px solid #ffd43b;outline-offset:-3px}
+.lv-set-help{margin:0;color:var(--muted);font-size:.88rem}
+.lv-set-note{margin:0}
+.lv-set-vol{display:flex;align-items:center;gap:10px;font-weight:800}
+.lv-set-vol .lv-range{flex:1;min-width:0}
+.lv-set-vol output{min-width:3.2em;text-align:right;font-variant-numeric:tabular-nums}
+.lv-set-opt input:disabled + span{opacity:.5}
+.lv-set-modal .lv-opt{padding:7px 10px}
+
+/* 진행자: 자동 넘김 */
+.lv-auto{flex:1 1 260px;min-width:240px;max-width:560px;display:flex;flex-direction:column;gap:6px;background:rgba(0,0,0,.28);border-radius:10px;padding:8px 12px}
+.lv-auto[hidden]{display:none!important}
+.lv-auto-row{display:flex;align-items:center;gap:10px;justify-content:space-between}
+.lv-auto-text{font-weight:900;font-size:1.05em}
+.lv-auto-track{display:block;height:12px;border-radius:6px;background:rgba(255,255,255,.25);overflow:hidden}
+.lv-auto-fill{display:block;height:100%;background:linear-gradient(90deg,#ffd43b,#fff);transform-origin:left;transition:transform .25s linear}
+.lv-host .lv-auto-stop{flex:0 0 auto}
+
+/* 진행자: 정답 공개 */
+.lv-bar-col.good .lv-bar{box-shadow:0 0 0 3px #fff,0 0 22px rgba(255,255,255,.55)}
+.lv-bar-count{font-variant-numeric:tabular-nums}
+.lv-htile.correct{animation:lv-correct-glow 1.2s ease-in-out .5s 3 alternate}
+
+/* 진행자: 점수판 */
+.lv-lb-avwrap{position:relative;display:inline-flex;flex:0 0 auto}
+.lv-lb-crown{position:absolute!important;left:50%;top:-21px;transform:translateX(-50%) rotate(-8deg);z-index:2!important;filter:drop-shadow(0 2px 0 rgba(0,0,0,.25));animation:lv-crown-drop .6s cubic-bezier(.2,1.6,.4,1) calc(var(--lv-rd,0s) + .5s) both}
+.lv-lb-first{overflow:visible;background:linear-gradient(90deg,#fff6cc,#fff 65%);animation:lv-slide-down .5s cubic-bezier(.2,1.2,.4,1) both,lv-glow 1.4s ease-in-out 1s infinite alternate}
+.lv-lb-first .lv-lb-fill{border-radius:8px}
+.lv-lb-upbadge{display:inline-flex;align-items:center;gap:4px;color:#fff;background:var(--green);border-radius:999px;padding:2px 10px 2px 6px;font-size:.66em;animation:lv-rankup .8s cubic-bezier(.2,1.4,.4,1) calc(var(--lv-rd,0s) + .6s) both}
+.lv-lb-up .lv-up-ico{animation:lv-up-bounce .8s ease-in-out 2s infinite}
+.lv-lb-up{box-shadow:0 4px 0 rgba(0,0,0,.2),inset 6px 0 0 #51cf66}
+
+/* 시상대 */
+.lv-fin{position:relative}
+.lv-fin > :not(.lv-spotlight){position:relative;z-index:1}
+.lv-spotlight{position:absolute;inset:0;z-index:0;pointer-events:none;opacity:0;transition:opacity 1.2s ease;background:radial-gradient(ellipse 30% 75% at 50% 35%,rgba(255,244,200,.34),transparent 70%),conic-gradient(from 180deg at 50% -8%,transparent 0 150deg,rgba(255,255,255,.09) 160deg,transparent 170deg,rgba(255,255,255,.09) 190deg,transparent 200deg,rgba(255,255,255,.07) 205deg,transparent 215deg 360deg)}
+.lv-fin.lv-spot-on .lv-spotlight{opacity:1}
+.lv-pod-avwrap{position:relative;display:inline-flex;margin:26px 0 4px}
+.lv-pod-av{width:clamp(56px,10.5vh,96px)!important;height:clamp(56px,10.5vh,96px)!important;box-shadow:0 5px 0 rgba(0,0,0,.25)}
+.lv-pod-1 .lv-pod-av{width:clamp(68px,13.5vh,120px)!important;height:clamp(68px,13.5vh,120px)!important;animation:lv-crown-glow 1.3s ease-in-out calc(var(--lv-delay,0s) + 1.1s) infinite alternate}
+.lv-pod-crown{position:absolute;left:50%;top:-34px;transform:translateX(-50%);z-index:2;filter:drop-shadow(0 0 10px rgba(255,212,59,.9));animation:lv-crown-drop .7s cubic-bezier(.2,1.6,.4,1) calc(var(--lv-delay,0s) + 1s) both}
+.lv-rest-av{flex:0 0 auto}
+.lv-team-res{position:relative}
+.lv-team-res.win{animation:kq-pop .35s ease-out both,lv-glow 1.4s ease-in-out .8s infinite alternate}
+.lv-team-crown{position:absolute;left:50%;top:-20px;transform:translateX(-50%);filter:drop-shadow(0 2px 0 rgba(0,0,0,.25))}
+.lv-coop-banner.good{background-image:linear-gradient(110deg,transparent 30%,rgba(255,255,255,.32) 45%,transparent 60%);background-size:260% 100%;animation:kq-pop .35s ease-out both,lv-shine 2.6s linear 1s infinite}
+
+/* v2 애니메이션 */
+@keyframes lv-bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+@keyframes lv-stamp-in{0%{transform:scale(2.4) rotate(-8deg);opacity:0}60%{transform:scale(.92) rotate(2deg);opacity:1}100%{transform:none}}
+@keyframes lv-badge-in{0%{transform:scale(0) rotate(-20deg);opacity:0}70%{transform:scale(1.15) rotate(4deg);opacity:1}100%{transform:none}}
+@keyframes lv-flicker{from{transform:scaleY(1) rotate(-3deg)}to{transform:scaleY(1.18) rotate(3deg)}}
+@keyframes lv-glow-fire{from{box-shadow:0 0 0 4px rgba(255,212,59,.45),0 0 14px rgba(255,146,43,.6)}to{box-shadow:0 0 0 6px rgba(255,212,59,.7),0 0 30px rgba(255,146,43,1)}}
+@keyframes lv-rankup{0%{transform:translateY(30px) scale(.6);opacity:0}70%{transform:translateY(-6px) scale(1.08);opacity:1}100%{transform:none;opacity:1}}
+@keyframes lv-up-bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+@keyframes lv-shake{0%,100%{transform:translateX(0)}15%{transform:translateX(-10px) rotate(-1deg)}30%{transform:translateX(9px) rotate(1deg)}45%{transform:translateX(-7px)}60%{transform:translateX(5px)}75%{transform:translateX(-3px)}}
+@keyframes lv-medal-spin{0%{transform:rotateY(0)}40%,100%{transform:rotateY(360deg)}}
+@keyframes lv-chip-pop{0%{transform:scale(.3) translateY(14px);opacity:0}60%{transform:scale(1.12);opacity:1}100%{transform:none}}
+@keyframes lv-correct-glow{from{box-shadow:inset 0 -6px 0 rgba(0,0,0,.2),0 0 0 5px #fff}to{box-shadow:inset 0 -6px 0 rgba(0,0,0,.2),0 0 0 7px #fff,0 0 34px 8px rgba(255,255,255,.75)}}
+@keyframes lv-crown-drop{0%{transform:translate(-50%,-40px) rotate(-30deg);opacity:0}70%{transform:translate(-50%,4px) rotate(4deg);opacity:1}100%{transform:translate(-50%,0) rotate(-8deg);opacity:1}}
+@keyframes lv-glow{from{box-shadow:0 4px 0 rgba(0,0,0,.2),0 0 0 3px #ffd43b,0 0 10px rgba(255,212,59,.45)}to{box-shadow:0 4px 0 rgba(0,0,0,.2),0 0 0 5px #ffd43b,0 0 30px rgba(255,212,59,.95)}}
+@keyframes lv-crown-glow{from{box-shadow:0 5px 0 rgba(0,0,0,.25),0 0 0 4px #ffd43b,0 0 14px 2px rgba(255,212,59,.6)}to{box-shadow:0 5px 0 rgba(0,0,0,.25),0 0 0 6px #ffe066,0 0 40px 12px rgba(255,212,59,.95)}}
+@keyframes lv-shine{from{background-position:130% 0}to{background-position:-130% 0}}
+@media (prefers-reduced-motion:reduce){
+  .lv-pod-crown,.lv-lb-crown,.lv-rankup,.lv-lb-upbadge,.lv-cheer,.lv-streak-hot{opacity:1}
+  .lv-p-lobby-av .lv-av,.lv-fin-me .lv-fin-av,.lv-medal-disc,.lv-up-ico{animation:none!important}
+}

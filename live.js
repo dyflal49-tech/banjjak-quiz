@@ -73,6 +73,11 @@
 
   // 게임이 없는지 확인 (EventSource 는 상태 코드를 알려주지 않으므로 fetch 로 머리만 확인 후 끊음)
   async function probeGame(pin, role) {
+    // Firebase 판(GitHub Pages)에는 /api 서버가 없으므로 KQ.api(info)로 게임이 있는지만 확인한다
+    if (KQ.me && KQ.me.firebase) {
+      try { await KQ.api(`/api/games/${encodeURIComponent(pin)}/info`); return 200; }
+      catch (e) { return typeof e.status === 'number' ? e.status : 0; }
+    }
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), 5000);
     try {
@@ -93,6 +98,85 @@
       }
     });
     return { close() { dead = true; stream?.close(); } };
+  }
+  // ---------- v2: 효과·배경음악·캐릭터·QR 안전 호출 (fx.js 가 없거나 일부 함수가 없어도 죽지 않게) ----------
+  const AUTO_CHOICES = [0, 5, 10, 15, 20];
+  const CHEERS = ['괜찮아요, 다음 문제에서 만회해요!', '실수하면서 더 똑똑해져요', '거의 다 왔어요, 힘내요!', '다음엔 꼭 맞힐 수 있어요', '틀려도 괜찮아요, 계속 도전해요!'];
+  const fxWarned = new Set();
+  function fxCall(name, ...args) {
+    try {
+      const o = KQ.fx; const f = o && o[name];
+      if (typeof f === 'function') return f.apply(o, args);
+    } catch (e) { if (!fxWarned.has('fx.' + name)) { fxWarned.add('fx.' + name); console.warn('[반짝퀴즈] 효과 오류:', name, e); } }
+    return undefined;
+  }
+  function fxCountUp(node, from, to, ms) {
+    if (!node) return;
+    if (KQ.fx && typeof KQ.fx.countUp === 'function') { try { KQ.fx.countUp(node, from, to, ms); return; } catch { /* 아래로 */ } }
+    node.textContent = Number(to || 0).toLocaleString('ko-KR');
+  }
+  function fxShake(node) {
+    if (!node) return;
+    if (KQ.fx && typeof KQ.fx.shake === 'function') { try { KQ.fx.shake(node); return; } catch { /* 아래로 */ } }
+    node.classList.remove('lv-shake'); void node.offsetWidth; node.classList.add('lv-shake');
+  }
+  function bgmCall(name, ...args) {
+    try {
+      const b = KQ.bgm; const f = b && b[name];
+      if (typeof f === 'function') return f.apply(b, args);
+    } catch (e) { if (!fxWarned.has('bgm.' + name)) { fxWarned.add('bgm.' + name); console.warn('[반짝퀴즈] 배경음악 오류:', name, e); } }
+    return undefined;
+  }
+  const bgmOn = () => !!(KQ.bgm && KQ.bgm.enabled !== false);
+  const bgmVol = () => { const x = KQ.bgm ? Number(KQ.bgm.volume) : NaN; return Number.isFinite(x) ? Math.max(0, Math.min(1, x)) : 0.5; };
+  const snd = kind => { try { if (KQ.sound && typeof KQ.sound.play === 'function') KQ.sound.play(kind); } catch { /* 무시 */ } };
+
+  const AV_FALLBACK = ['#e21b3c', '#1368ce', '#d89e00', '#26890c', '#864cbf', '#0aa3a3', '#c2410c', '#46178f'];
+  const avKey = av => { try { return av ? JSON.stringify(av) : ''; } catch { return ''; } };
+  // 캐릭터: KQ.avatar.render 가 있으면 그것, 없으면(구버전 참가자 등) 이니셜 동그라미
+  function avatarNode(av, size, nickname, cls = '') {
+    let inner = null;
+    if (av && typeof av === 'object' && KQ.avatar && typeof KQ.avatar.render === 'function') {
+      try { const r = KQ.avatar.render(av, size); if (r instanceof Node) inner = r; } catch { inner = null; }
+    }
+    const wrap = el('span', { class: ('lv-av ' + cls).trim(), 'aria-hidden': 'true', style: { width: size + 'px', height: size + 'px' } });
+    if (inner) { wrap.append(inner); return wrap; }
+    const name = String(nickname || '').trim();
+    let h = 0; for (const ch of name) h = (h * 31 + ch.codePointAt(0)) >>> 0;
+    wrap.classList.add('lv-av-fallback');
+    wrap.style.background = AV_FALLBACK[h % AV_FALLBACK.length];
+    wrap.style.fontSize = Math.max(10, Math.round(size * 0.46)) + 'px';
+    if (name) wrap.textContent = Array.from(name)[0];
+    else wrap.append(shape(h % 4, Math.round(size * 0.5)));
+    return wrap;
+  }
+  function qrNode(url, px) {
+    try { if (typeof KQ.qr === 'function') { const n = KQ.qr(url, px); if (n instanceof Node) return n; } } catch { /* 아래로 */ }
+    return el('span', { class: 'lv-qr-missing' }, 'QR 코드를 만들 수 없어요. 주소를 직접 입력해 들어오세요.');
+  }
+  function joinBase(v) {
+    const raw = (v && Array.isArray(v.joinUrls) && v.joinUrls[0]) || (KQ.me && Array.isArray(KQ.me.addresses) && KQ.me.addresses[0]) || (location.origin + (KQ.BASE || ''));
+    return String(raw).replace(/\/+$/, '');
+  }
+  const joinUrlOf = (v, pin) => joinBase(v) + '/?pin=' + encodeURIComponent(String(pin || (v && v.pin) || ''));
+  const shortUrl = u => String(u || '').replace(/^https?:\/\//, '').replace(/\/+$/, '');
+  function crownIcon(size = 40) {
+    return el('svg', { viewBox: '0 0 48 36', width: size, height: Math.round(size * 0.75), 'aria-hidden': 'true', class: 'lv-crown' },
+      el('polygon', { points: '4,29 2,7 14,17 24,2 34,17 46,7 44,29', fill: '#ffd43b', stroke: '#b37f00', 'stroke-width': 2, 'stroke-linejoin': 'round' }),
+      el('rect', { x: 4, y: 28, width: 40, height: 6, rx: 2, fill: '#f2b705', stroke: '#b37f00', 'stroke-width': 2 }),
+      el('circle', { cx: 24, cy: 20, r: 3.2, fill: '#e21b3c' }), el('circle', { cx: 13, cy: 23, r: 2.2, fill: '#1368ce' }), el('circle', { cx: 35, cy: 23, r: 2.2, fill: '#26890c' }));
+  }
+  function arrowUpIcon(size = 20) {
+    return el('svg', { viewBox: '0 0 24 24', width: size, height: size, 'aria-hidden': 'true', class: 'lv-up-ico' },
+      el('polygon', { points: '12,2 22,13 15.5,13 15.5,22 8.5,22 8.5,13 2,13', fill: 'currentColor' }));
+  }
+  function starIcon(size = 40) {
+    return el('svg', { viewBox: '0 0 32 32', width: size, height: size, 'aria-hidden': 'true', class: 'lv-ico' },
+      el('polygon', { points: '16,2 20.2,11.6 30.5,12.4 22.6,19.1 25,29.2 16,23.8 7,29.2 9.4,19.1 1.5,12.4 11.8,11.6', fill: 'currentColor' }));
+  }
+  function medalNode(rank) {
+    const cls = ['', 'gold', 'silver', 'bronze'][rank] || '';
+    return el('div', { class: 'lv-medal ' + cls, 'aria-hidden': 'true' }, el('div', { class: 'lv-medal-ribbon' }), el('div', { class: 'lv-medal-disc' }, el('span', {}, String(rank))));
   }
   const announce = (node, text) => { node.textContent = ''; setTimeout(() => { node.textContent = text; }, 30); };
 
@@ -143,18 +227,24 @@
     }
     const live = el('div', { class: 'sr-only', role: 'status', 'aria-live': 'assertive', 'aria-atomic': 'true' });
     const barTime = el('span', { class: 'lv-pbar-time' });
+    const barAv = el('span', { class: 'lv-pbar-av', 'aria-hidden': 'true' });
     const barName = el('span', { class: 'lv-pbar-name' });
     const barScore = el('span', { class: 'lv-pbar-score' });
-    const bar = el('header', { class: 'lv-pbar', hidden: true }, barTime, barName, barScore);
+    const bar = el('header', { class: 'lv-pbar', hidden: true }, barTime, el('span', { class: 'lv-pbar-who' }, barAv, barName), barScore);
     const main = el('main', { class: 'lv-pmain' });
     const panel = el('section', { class: 'lv-mode-panel', 'aria-label': '게임 모드 상태' });
+    const autoFill = el('span', { class: 'lv-pauto-fill' });
+    const autoStrip = el('div', { class: 'lv-pauto', hidden: true }, el('span', { class: 'lv-pauto-text' }, '곧 다음 문제'), el('span', { class: 'lv-pauto-track', 'aria-hidden': 'true' }, autoFill));
     const flashTitle = el('div', { class: 'lv-flash-title' });
     const flashSub = el('div', { class: 'lv-flash-sub' });
     const flash = el('div', { class: 'lv-flash', hidden: true, 'aria-hidden': 'true' }, el('div', { class: 'lv-flash-icon' }), flashTitle, flashSub);
-    const shell = el('div', { class: 'lv-player lv-bg-purple' }, bar, main, panel, flash, live);
+    const shell = el('div', { class: 'lv-player lv-bg-purple' }, bar, main, autoStrip, panel, flash, live);
     KQ.render(shell);
 
     let view = null, sig = '', screen = null, m = null, mId = null, seeded = false, lastSeq = null, submitted = null, autoNamed = false, ended = false, flashTimer = null, panelOn = false, conn = 'ok';
+    let barAvKey = null, lastScore = null, autoKey = null, autoTotal = 1;
+    const pTimers = [];
+    const later = (fn, ms) => { const t = setTimeout(() => { if (ended) return; try { fn(); } catch (e) { console.warn('[반짝퀴즈] 효과 오류:', e); } }, Math.max(0, ms)); pTimers.push(t); return t; };
     const sendAction = (kind, target) => KQ.api(`/api/games/${encodeURIComponent(pin)}/action`, 'POST', { kind, target }).catch(e => { KQ.toast(e.message, true); throw e; });
 
     function setScreen(key, built) {
@@ -162,6 +252,7 @@
       main.replaceChildren(built.node);
       shell.className = 'lv-player ' + (built.bg || 'lv-bg-purple') + (built.panelBig ? ' lv-panel-big' : '') + (built.full ? ' lv-full' : '');
       if (built.teamColor) shell.style.setProperty('--lv-team', built.teamColor); else shell.style.removeProperty('--lv-team');
+      if (typeof built.enter === 'function') { try { built.enter(); } catch (e) { console.warn('[반짝퀴즈] 화면 효과 오류:', e); } }
     }
     setScreen('loading', { node: el('div', { class: 'lv-center-msg' }, el('div', { class: 'lv-spinner', 'aria-hidden': 'true' }), el('h1', {}, '게임에 연결하는 중…'), el('p', {}, 'PIN ' + fmtPin(pin))) });
 
@@ -173,13 +264,40 @@
       return ['v', v.phase, q ? q.id : '-', (v.answered || isSubmitted(v)) ? 1 : 0, q?.ownQuestion ? 1 : 0, isLocked(v) ? 1 : 0, v.actions?.kind || '', v.result ? v.result.seq : '', v.me?.team ?? ''].join('|');
     }
 
+    function rankUpOf(res, v) {
+      const now = Number((res && res.rank) || (v && v.me && v.me.rank) || 0);
+      const prev = Number(res && res.prevRank);
+      return prev > 0 && now > 0 && prev > now ? prev - now : 0;
+    }
     function noteResult(res, phase) {
-      if (!res || res.seq === lastSeq) return;
+      if (!res || res.seq === lastSeq) return false;
       lastSeq = res.seq;
       const msg = res.correct === true ? `정답! ${num(res.points)}점 획득` : res.correct === false ? '아쉬워요, 오답이에요' + (res.answerText ? `. ${res.answerText}` : '') : '응답 고마워요';
-      announce(live, msg + (res.rank ? `. 현재 ${res.rank}위` : ''));
-      if (res.correct === true) { KQ.sound.play('correct'); vibrate(60); } else if (res.correct === false) { KQ.sound.play('wrong'); vibrate([80, 60, 80]); }
+      const up = rankUpOf(res, view);
+      announce(live, msg + (res.rank ? `. 현재 ${res.rank}위` : '') + (up ? `. ${up}계단 올랐어요` : ''));
+      if (res.correct === true) { snd('correct'); vibrate(60); }
+      else if (res.correct === false) { snd('wrong'); vibrate([80, 60, 80]); }
+      else snd('sparkle');
       if (phase === 'running') showFlash(res);
+      return true;
+    }
+    // 진행자가 넘기는 게임의 정답 공개 효과 (같은 seq 로는 한 번만: noteResult 가 걸러 줌)
+    function celebrate(res) {
+      const sc = screen || {};
+      const streak = Number(res.streak) || 0;
+      if (res.correct === true) {
+        fxCall('flash', '#ffffff', 260);
+        fxCall('confetti', { y: 0.78, count: Math.min(320, 90 + streak * 35), power: Math.min(1.9, 1 + streak * 0.12), spread: Math.min(110, 70 + streak * 6) });
+        fxCall('stamp', '정답!', { color: '#26890c', sub: streak >= 2 ? `연속 정답 ${streak}` : '' });
+        if (sc.pointsNum) fxCountUp(sc.pointsNum, 0, Number(res.points) || 0, 900);
+        if (streak >= 3) later(() => snd('cheer'), 380);
+        if (streak >= 3 && sc.streakEl) later(() => fxCall('stars', sc.streakEl), 600);
+      } else if (res.correct === false) {
+        later(() => fxShake(sc.node), 60);
+      } else if (sc.icon) {
+        later(() => fxCall('stars', sc.icon), 150);
+      }
+      if (rankUpOf(res, view) > 0) later(() => { snd('levelup'); if (sc.rankBadge) fxCall('stars', sc.rankBadge); }, 900);
     }
     function showFlash(res) {
       clearTimeout(flashTimer);
@@ -189,6 +307,8 @@
       flashTitle.textContent = good ? '정답!' : bad ? '아쉬워요' : '응답 고마워요';
       flashSub.textContent = good ? `+${num(res.points)}` + (res.streak >= 2 ? `  ·  연속 정답 ${res.streak}` : '') : bad ? (res.answerText || '다음 문제에서 만회해요') : '';
       flash.hidden = false;
+      if (good) fxCall('confetti', { y: 0.62, count: Math.min(90, 36 + (Number(res.streak) || 0) * 8), power: 0.75, spread: 60 });
+      else if (bad) fxShake(icon);
       flashTimer = setTimeout(() => { flash.hidden = true; }, 900);
     }
 
@@ -197,7 +317,12 @@
       bar.hidden = !me;
       if (!me) return;
       barName.textContent = me.nickname || '';
-      barScore.textContent = num(me.score);
+      const k = avKey(me.avatar) + '|' + (me.nickname || '');
+      if (k !== barAvKey) { barAvKey = k; barAv.replaceChildren(avatarNode(me.avatar, 32, me.nickname)); }
+      const sc = Number(me.score) || 0;
+      if (lastScore !== null && sc > lastScore) fxCountUp(barScore, lastScore, sc, 900);
+      else if (lastScore !== sc) barScore.textContent = num(sc);
+      lastScore = sc;
       barScore.setAttribute('aria-label', `점수 ${num(me.score)}점`);
       if (me.teamColor) bar.style.setProperty('--lv-team', me.teamColor); else bar.style.removeProperty('--lv-team');
       bar.classList.toggle('lv-pbar-team', !!me.teamColor);
@@ -211,6 +336,15 @@
         barTime.classList.toggle('hurry', s <= 5);
         barTime.hidden = false;
       } else { barTime.textContent = ''; barTime.hidden = true; }
+    }
+    // 학생 기기: 자동 넘김이 예약돼 있으면 작은 "곧 다음 문제" 막대
+    function updateAuto(v) {
+      const on = !!(v && v.autoAt && v.me && !v.kicked && (v.phase === 'reveal' || v.phase === 'leaderboard'));
+      autoStrip.hidden = !on;
+      if (!on) { autoKey = null; return; }
+      const rem = Math.max(0, Number(v.autoAt) - KQ.now());
+      if (autoKey !== v.autoAt) { autoKey = v.autoAt; autoTotal = Math.max(1000, rem); }
+      autoFill.style.transform = `scaleX(${Math.min(1, rem / autoTotal).toFixed(3)})`;
     }
     function renderPanel(v) {
       if (!v.me || v.kicked) { if (panelOn) { modeCall(m, 'dispose', panel); panel.replaceChildren(); panelOn = false; } return; }
@@ -233,11 +367,14 @@
         return;
       }
       const seq = v.result ? v.result.seq : null;
-      if (!seeded) { seeded = true; lastSeq = seq; } else if (v.result && (v.phase === 'running' || v.phase === 'reveal')) noteResult(v.result, v.phase);
+      let fresh = false;
+      if (!seeded) { seeded = true; lastSeq = seq; } else if (v.result && (v.phase === 'running' || v.phase === 'reveal')) fresh = noteResult(v.result, v.phase);
       updateBar(v);
       const s = sigOf(v);
       if (s !== sig) setScreen(s, build(v)); else if (screen && screen.update) screen.update(v);
       renderPanel(v);
+      updateAuto(v);
+      if (fresh && v.phase === 'reveal') celebrate(v.result);
     }
 
     function build(v) {
@@ -264,7 +401,7 @@
       }
     }
 
-    // --- 닉네임 ---
+    // --- 닉네임 + 캐릭터 ---
     function joinScreen(v) {
       const err = el('p', { class: 'lv-form-error', role: 'alert' });
       const input = el('input', { class: 'input big', id: 'lv-nick', type: 'text', maxlength: 15, autocomplete: 'off', placeholder: '닉네임', 'aria-describedby': 'lv-nick-help' });
@@ -275,17 +412,32 @@
         catch { input.value = KQ.randomNickname().slice(0, 15); }
         finally { randomBtn.disabled = false; input.focus(); err.textContent = ''; }
       }, 'ghost lv-random-btn');
-      const okBtn = el('button', { type: 'submit', class: 'btn big lv-dark-btn' }, '확인');
-      const form = el('form', { class: 'card lv-pin-card', novalidate: true, onSubmit: async e => {
+      // 캐릭터 편집기 (fx.js 의 KQ.avatar 가 없으면 생략)
+      let curAv = null, editor = null;
+      if (KQ.avatar && typeof KQ.avatar.editor === 'function') {
+        try {
+          curAv = typeof KQ.avatar.saved === 'function' ? KQ.avatar.saved() : (typeof KQ.avatar.random === 'function' ? KQ.avatar.random() : null);
+          const ed = KQ.avatar.editor(curAv, av => { curAv = av; });
+          editor = ed instanceof Node ? ed : null;
+        } catch (e) { console.warn('[반짝퀴즈] 캐릭터 편집기 오류:', e); editor = null; }
+      }
+      // 편집기 단추가 폼 제출을 일으키지 않도록 편집기는 폼 밖에 두고, 확인 단추는 form 속성으로 폼에 연결
+      const okBtn = el('button', { type: 'submit', class: 'btn big lv-dark-btn lv-join-ok', form: 'lv-join-form' }, editor ? '이 캐릭터로 입장' : '확인');
+      const form = el('form', { id: 'lv-join-form', class: 'lv-join-form', novalidate: true, onSubmit: async e => {
         e.preventDefault();
         const nick = input.value.trim();
         if (nick.length < 1 || nick.length > 15) { err.textContent = '닉네임은 1~15자로 입력하세요.'; input.focus(); return; }
         okBtn.disabled = true; randomBtn.disabled = true;
+        if (curAv && KQ.avatar && typeof KQ.avatar.save === 'function') { try { KQ.avatar.save(curAv); } catch { /* 무시 */ } }
         try {
-          const r = await KQ.api(`/api/games/${encodeURIComponent(pin)}/join`, 'POST', { nickname: nick });
+          const body = { nickname: nick };
+          if (curAv) body.avatar = curAv;
+          const r = await KQ.api(`/api/games/${encodeURIComponent(pin)}/join`, 'POST', body);
           if (r.me) {
             autoNamed = !!(r.me.nickname && r.me.nickname !== nick);
-            if (view) { view = { ...view, me: r.me }; sig = ''; apply(view); }
+            const me = { ...r.me };
+            if (!me.avatar && curAv) me.avatar = curAv;
+            if (view) { view = { ...view, me }; sig = ''; apply(view); }
           }
         } catch (ex) {
           err.textContent = ex.status === 404 ? '게임을 찾을 수 없어요. PIN을 확인하세요.'
@@ -297,28 +449,73 @@
       } },
       el('p', { class: 'lv-join-pinline' }, 'PIN ' + fmtPin(pin)),
       v.quizTitle ? el('p', { class: 'lv-join-title' }, v.quizTitle) : null,
-      el('label', { class: 'sr-only', for: 'lv-nick' }, '닉네임'),
+      el('label', { class: 'lv-field-label', for: 'lv-nick' }, '닉네임'),
       input,
       el('p', { class: 'lv-help', id: 'lv-nick-help' }, '1~15자, 친구가 알아볼 수 있는 순한 이름으로 정해요.'),
-      err, okBtn, randomBtn);
-      requestAnimationFrame(() => input.focus());
-      return { node: el('div', { class: 'lv-home-inner' }, el('h1', { class: 'logo-big lv-home-logo' }, '반짝퀴즈'), form), bg: 'lv-bg-purple', full: true };
+      randomBtn);
+      const card = el('div', { class: 'card lv-pin-card lv-join-card' }, form,
+        editor ? el('section', { class: 'lv-av-section', 'aria-labelledby': 'lv-av-h' }, el('h2', { class: 'lv-av-h', id: 'lv-av-h' }, '내 캐릭터 고르기'), editor) : null,
+        err, okBtn);
+      // 휴대폰에서는 키보드가 캐릭터 고르기를 가리지 않도록 자동 포커스하지 않는다
+      const coarse = !!(window.matchMedia && window.matchMedia('(pointer:coarse)').matches);
+      if (!coarse || !editor) requestAnimationFrame(() => input.focus());
+      return { node: el('div', { class: 'lv-home-inner lv-join-inner' }, el('h1', { class: 'logo-big lv-home-logo' }, '반짝퀴즈'), card), bg: 'lv-bg-purple', full: true };
     }
 
     // --- 로비 ---
     function lobbyScreen(v) {
       const me = v.me;
+      const avBox = el('div', { class: 'lv-p-lobby-av pop-in' });
+      const nickEl = el('div', { class: 'lv-nick-big pop-in' }, me.nickname || '');
+      let shownKey = null;
+      const update = vv => {
+        const mm = vv.me || {};
+        const k = avKey(mm.avatar) + '|' + (mm.nickname || '');
+        if (k === shownKey) return;
+        shownKey = k;
+        avBox.replaceChildren(avatarNode(mm.avatar, 132, mm.nickname));
+        nickEl.textContent = mm.nickname || '';
+      };
+      update(v);
+      const canEdit = !!(KQ.avatar && typeof KQ.avatar.editor === 'function');
       const node = el('div', { class: 'lv-center-msg lv-p-lobby' },
         el('h1', {}, '들어왔어요!'),
-        el('p', { class: 'lv-lead' }, '화면에서 내 닉네임을 확인하세요'),
-        el('div', { class: 'lv-nick-big pop-in' }, me.nickname || ''),
+        el('p', { class: 'lv-lead' }, '화면에서 내 캐릭터와 닉네임을 확인하세요'),
+        avBox,
+        nickEl,
+        canEdit ? KQ.btn('캐릭터 바꾸기', () => openAvatarEdit(), 'small lv-white-btn lv-av-change') : null,
         autoNamed ? el('p', { class: 'lv-note' }, '닉네임이 자동으로 정해졌어요') : null,
         el('p', { class: 'lv-p-mode' }, v.modeName || modeMeta(v.mode).name || ''),
         me.teamName ? el('p', { class: 'lv-team-badge' }, me.teamName) : null,
         el('div', { class: 'lv-dots', 'aria-hidden': 'true' }, el('span'), el('span'), el('span')),
         el('p', { class: 'lv-sub' }, '선생님이 곧 시작해요'));
       announce(live, `${me.nickname} 닉네임으로 들어왔어요`);
-      return { node, bg: me.teamColor ? 'lv-bg-team' : 'lv-bg-purple', teamColor: me.teamColor };
+      return { node, bg: me.teamColor ? 'lv-bg-team' : 'lv-bg-purple', teamColor: me.teamColor, update };
+    }
+    function openAvatarEdit() {
+      if (!view || !view.me || !KQ.avatar) return;
+      let cur = view.me.avatar || (typeof KQ.avatar.saved === 'function' ? KQ.avatar.saved() : null);
+      let ed = null;
+      try { ed = KQ.avatar.editor(cur, av => { cur = av; }); } catch (e) { console.warn('[반짝퀴즈] 캐릭터 편집기 오류:', e); }
+      if (!(ed instanceof Node)) { KQ.toast('캐릭터 편집기를 열 수 없어요.', true); return; }
+      const md = KQ.modal('내 캐릭터 바꾸기');
+      md.root.classList.add('lv-av-modal');
+      md.body.append(ed);
+      const save = KQ.btn('저장', async () => {
+        save.disabled = true;
+        try {
+          if (typeof KQ.avatar.save === 'function') { try { KQ.avatar.save(cur); } catch { /* 무시 */ } }
+          const r = await KQ.api(`/api/games/${encodeURIComponent(pin)}/join`, 'POST', { nickname: view.me.nickname, avatar: cur });
+          if (view && view.me) {
+            view = { ...view, me: { ...view.me, ...((r && r.me) || {}), avatar: cur } };
+            if (screen && screen.update) screen.update(view);
+            updateBar(view);
+          }
+          md.close();
+          KQ.toast('캐릭터를 바꿨어요.');
+        } catch (e) { KQ.toast(e.message, true); save.disabled = false; }
+      }, 'primary');
+      md.foot.append(KQ.btn('취소', () => md.close(), 'ghost'), save);
     }
 
     // --- 카운트다운 ---
@@ -437,29 +634,38 @@
     function revealScreen(v) {
       const r = v.result, q = v.question, me = v.me;
       const team = TEAM_MODES.has(v.mode);
-      let bg = 'lv-bg-purple';
+      let bg = 'lv-bg-purple', pointsNum = null, icon = null, rankBadge = null, streakEl = null;
       const box = el('div', { class: 'lv-center-msg lv-result' + (team ? ' compact' : '') });
       if (!r) {
         if (q && q.ownQuestion) add(box, el('h1', {}, '내가 낸 문제였어요'), el('p', {}, '친구들이 잘 풀었는지 화면을 보세요.'));
         else { bg = 'lv-bg-dark'; add(box, el('div', { class: 'lv-res-icon' }, crossIcon(56)), el('h1', {}, '시간이 끝났어요'), el('p', {}, '이번 문제는 답하지 못했어요. 다음 문제를 노려 봐요!')); }
       } else if (r.correct === true) {
         bg = 'lv-bg-good';
-        add(box, el('div', { class: 'lv-res-icon pop-in' }, checkIcon(64)), el('h1', { class: 'lv-res-title' }, '정답!'),
-          el('div', { class: 'lv-points pop-in' }, '+' + num(r.points)),
-          r.streak >= 2 ? el('div', { class: 'lv-streak' }, el('span', { class: 'lv-flame', 'aria-hidden': 'true' }), `연속 정답 ${r.streak}`) : null);
+        const st = Number(r.streak) || 0;
+        pointsNum = el('span', { class: 'lv-points-num' }, num(r.points));
+        icon = el('div', { class: 'lv-res-icon pop-in' }, checkIcon(64));
+        streakEl = st >= 2 ? el('div', { class: 'lv-streak lv-streak-hot' + (st >= 3 ? ' fire' : '') + (st >= 5 ? ' blaze' : '') }, el('span', { class: 'lv-flame', 'aria-hidden': 'true' }), `연속 정답 ${st}`) : null;
+        add(box, icon, el('h1', { class: 'lv-res-title lv-res-pop' }, '정답!'),
+          el('div', { class: 'lv-points pop-in' }, '+', pointsNum),
+          streakEl);
       } else if (r.correct === false) {
         bg = 'lv-bg-bad';
-        add(box, el('div', { class: 'lv-res-icon' }, crossIcon(64)), el('h1', { class: 'lv-res-title' }, '아쉬워요'),
+        icon = el('div', { class: 'lv-res-icon' }, crossIcon(64));
+        add(box, icon, el('h1', { class: 'lv-res-title' }, '아쉬워요'),
+          el('p', { class: 'lv-cheer' }, CHEERS[Math.abs(Number(r.seq) || 0) % CHEERS.length]),
           r.answerText ? el('p', { class: 'lv-answer-text' }, r.answerText) : null,
           r.lostStreak ? el('p', { class: 'lv-sub' }, '연속 정답이 끊겼어요') : null);
       } else {
-        add(box, el('div', { class: 'lv-res-icon' }, checkIcon(56)), el('h1', { class: 'lv-res-title' }, '응답 고마워요'));
+        icon = el('div', { class: 'lv-res-icon lv-res-poll pop-in' }, starIcon(56));
+        add(box, icon, el('h1', { class: 'lv-res-title' }, '응답 고마워요'), el('p', { class: 'lv-sub' }, '설문은 정답이 없어요. 모두의 생각을 화면에서 봐요.'));
       }
       const rank = (r && r.rank) || me.rank;
       if (rank) add(box, el('div', { class: 'lv-rank-pill' }, `현재 ${rank}위`));
+      const up = r ? rankUpOf(r, v) : 0;
+      if (up) { rankBadge = el('div', { class: 'lv-rankup' }, arrowUpIcon(22), el('span', {}, `${up}계단 상승!`)); box.append(rankBadge); }
       if (r && r.message) add(box, el('p', { class: 'lv-message' }, r.message));
       if (team && v.actions && v.actions.remaining > 0) box.append(el('p', { class: 'lv-sub' }, v.actions.kind === 'launch' ? '아래에서 에너지를 보낼 행성을 눌러요!' : '아래 지도를 눌러 땅을 차지해요!'));
-      return { node: box, bg, panelBig: team };
+      return { node: box, bg, panelBig: team, pointsNum, icon, rankBadge, streakEl };
     }
 
     // --- 순위 (클래식) ---
@@ -477,6 +683,7 @@
       (rows || []).slice(0, 5).forEach((row, i) => {
         list.append(el('li', { class: 'lv-top5-row' + (me && row.nickname === me.nickname ? ' me' : ''), style: { animationDelay: (i * 0.12) + 's' } },
           el('span', { class: 'lv-top5-rank' }, String(row.rank || i + 1)),
+          avatarNode(row.avatar, 30, row.nickname, 'lv-top5-av'),
           el('span', { class: 'lv-top5-name' }, row.nickname || ''),
           el('span', { class: 'lv-top5-score' }, num(row.score))));
       });
@@ -487,18 +694,40 @@
     // --- 종료 ---
     function finishedScreen(v) {
       const me = v.me;
+      const rank = Number(me.rank) || 0;
+      const top = rank >= 1 && rank <= 3;
       const pod = (v.podium || []).slice().sort((a, b) => (a.rank || 99) - (b.rank || 99));
       const top3 = el('div', { class: 'lv-mini-podium', 'aria-hidden': 'true' },
-        [1, 0, 2].map(i => pod[i] ? el('div', { class: `lv-mini-pod p${i + 1}` }, el('span', { class: 'lv-mini-name' }, pod[i].nickname || ''), el('span', { class: 'lv-mini-block' }, String(pod[i].rank || i + 1))) : el('div', { class: `lv-mini-pod p${i + 1} empty` })));
-      const box = el('div', { class: 'lv-center-msg lv-finished' },
+        [1, 0, 2].map(i => pod[i] ? el('div', { class: `lv-mini-pod p${i + 1}` }, avatarNode(pod[i].avatar, 36, pod[i].nickname, 'lv-mini-av'), el('span', { class: 'lv-mini-name' }, pod[i].nickname || ''), el('span', { class: 'lv-mini-block' }, String(pod[i].rank || i + 1))) : el('div', { class: `lv-mini-pod p${i + 1} empty` })));
+      const scoreNum = el('span', { class: 'lv-final-num' }, num(me.score));
+      const acc = me.answered ? (Number(me.correct) || 0) / me.answered : 0;
+      const praise = top ? ['', '최고예요! 1등을 차지했어요', '멋져요! 2등이에요', '훌륭해요! 3등이에요'][rank] : '끝까지 함께해 줘서 고마워요';
+      const praiseSub = top ? '끝까지 함께해 줘서 고마워요'
+        : acc >= 0.7 ? '정답을 정말 많이 맞혔어요. 대단해요!'
+        : (Number(me.correct) || 0) > 0 ? `${me.correct}문제나 맞혔어요. 다음엔 더 잘할 수 있어요!`
+        : '다음 게임에서 더 멋지게 해 봐요!';
+      const box = el('div', { class: 'lv-center-msg lv-finished' + (top ? ' lv-fin-top' : '') },
         el('p', { class: 'lv-lead' }, '게임 끝!'),
-        el('h1', { class: 'lv-rank-big pop-in' }, me.rank ? `${me.rank}위` : '수고했어요'),
-        el('p', { class: 'lv-final-score' }, `${num(me.score)}점` + (me.answered ? ` · ${me.answered}문제 중 ${me.correct || 0}개 정답` : '')),
+        el('div', { class: 'lv-fin-me' }, avatarNode(me.avatar, 120, me.nickname, 'lv-fin-av'), top ? medalNode(rank) : null),
+        el('h1', { class: 'lv-rank-big lv-fin-rank pop-in' }, rank ? `${rank}위` : '수고했어요'),
+        el('p', { class: 'lv-praise' }, praise),
+        el('p', { class: 'lv-praise-sub' }, praiseSub),
+        el('p', { class: 'lv-final-score' }, scoreNum, '점' + (me.answered ? ` · ${me.answered}문제 중 ${me.correct || 0}개 정답` : '')),
         top3,
         top5List(pod, me),
         KQ.btn('다시 홈으로', () => KQ.go('/'), 'big lv-white-btn'));
-      announce(live, `게임이 끝났어요. ${me.rank ? me.rank + '위' : ''}, ${num(me.score)}점`);
-      return { node: box, bg: 'lv-bg-purple' };
+      announce(live, `게임이 끝났어요. ${rank ? rank + '위' : ''}, ${num(me.score)}점. ${praise}`);
+      const enter = () => {
+        fxCountUp(scoreNum, 0, Number(me.score) || 0, 1400);
+        if (top) {
+          later(() => { fxCall('fireworks', 5000); snd('fanfare'); }, 350);
+          later(() => snd('cheer'), 1300);
+        } else {
+          fxCall('rain', 4500);
+          later(() => snd('sparkle'), 300);
+        }
+      };
+      return { node: box, bg: 'lv-bg-purple', enter };
     }
 
     function onGone() {
@@ -512,6 +741,7 @@
     const timer = setInterval(() => {
       if (!view || ended) return;
       updateTime(view);
+      updateAuto(view);
       if (screen && screen.tick) screen.tick(view);
     }, 250);
     const stream = watchStream(pin, 'player', apply, onGone, st => {
@@ -521,8 +751,10 @@
     KQ.onLeave(() => {
       ended = true;
       clearInterval(timer); clearTimeout(flashTimer); stream.close();
+      while (pTimers.length) clearTimeout(pTimers.pop());
       if (panelOn) modeCall(m, 'dispose', panel);
-      KQ.sound.music(false);
+      // 학생 기기는 배경음악을 틀지 않지만, 혹시 남아 있으면 정리
+      fxCall('stop'); bgmCall('stop');
     });
   });
 
@@ -588,7 +820,7 @@
       optsBox.hidden = false;
       requestAnimationFrame(() => optsBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' }));
     }
-    const state = { randomizeQuestions: false, randomizeAnswers: false, showOnDevice: true, friendlyNicknames: false, skipOwnQuestions: true, teamCount: 4, durationMin: 5, goal: 15 };
+    const state = { randomizeQuestions: false, randomizeAnswers: false, showOnDevice: true, friendlyNicknames: false, skipOwnQuestions: true, teamCount: 4, durationMin: 5, goal: 15, autoAdvance: 10 };
     function check(key, label, help) {
       const id = 'lv-opt-' + key;
       return el('label', { class: 'lv-opt' }, el('input', { type: 'checkbox', id, checked: state[key], 'aria-describedby': help ? id + '-help' : null, onChange: e => { state[key] = e.target.checked; } }), el('span', {}, el('strong', {}, label), help ? el('small', { id: id + '-help' }, help) : null));
@@ -614,7 +846,9 @@
         el('div', { class: 'lv-opts-grid' },
           info.teams ? select('teamCount', '팀 수', [2, 3, 4], v => `${v}팀`) : null,
           info.pacing === 'player' ? select('durationMin', '게임 시간', [2, 3, 5, 7, 10], v => `${v}분`) : null,
-          info.id === 'robot' ? select('goal', '결승선 문제 수', [10, 15, 20, 30], v => `${v}문제`) : null),
+          info.id === 'robot' ? select('goal', '결승선 문제 수', [10, 15, 20, 30], v => `${v}문제`) : null,
+          info.pacing !== 'player' ? select('autoAdvance', '결과 자동 넘김', AUTO_CHOICES, v => v ? `${v}초 뒤 자동으로 넘김` : '끔 (선생님이 직접 넘김)') : null),
+        info.pacing !== 'player' ? el('p', { class: 'lv-help' }, '정답 공개와 점수판이 정한 시간 뒤에 저절로 다음으로 넘어가요. 게임 중에도 상단의 설정에서 바꿀 수 있어요.') : null,
         info.pacing === 'player' && pollCount ? el('p', { class: 'notice' }, `각자 속도 게임에서는 설문 문제 ${pollCount}개를 빼고 진행해요.`) : null,
         !qs.length || usable <= 0 ? el('p', { class: 'notice warn' }, '이 모드로 풀 수 있는 문제가 없어요. 먼저 문제를 추가하세요.') : null,
         el('div', { class: 'row' }, el('span', { class: 'spacer' }), createBtn));
@@ -625,6 +859,7 @@
         if (info.teams) options.teamCount = state.teamCount;
         if (info.pacing === 'player') options.duration = state.durationMin * 60;
         if (info.id === 'robot') options.goal = state.goal;
+        if (info.pacing !== 'player') options.autoAdvance = state.autoAdvance;
         try {
           const r = await KQ.api('/api/games', 'POST', { quizId, mode: info.id, options });
           try { sessionStorage.setItem('lv-quiz-' + r.pin, quizId); } catch { /* 무시 */ }
@@ -655,7 +890,12 @@
       try { await hostAct(action, extra); } catch (e) { KQ.toast(e.message, true); } finally { if (btn) setTimeout(() => { if (btn.isConnected) btn.disabled = false; }, 600); }
     };
 
-    let view = null, sig = '', screen = null, m = null, mId = null, prevIds = null, musicOn = false, ended = false, conn = 'connecting', fanfareTimer = null;
+    let view = null, sig = '', screen = null, m = null, mId = null, prevIds = null, ended = false, conn = 'connecting';
+    let tenseOn = false, settingsUI = null, podiumStarted = false, preRanks = null, preRanksQi = -1;
+    const fxTimers = [];
+    const later = (fn, ms) => { const t = setTimeout(() => { if (ended) return; try { fn(); } catch (e) { console.warn('[반짝퀴즈] 효과 오류:', e); } }, Math.max(0, ms)); fxTimers.push(t); return t; };
+    const clearLater = () => { while (fxTimers.length) clearTimeout(fxTimers.pop()); };
+    const fxDone = new Set();
     const stage = el('div', { class: 'lv-stage', 'aria-label': '게임 무대' });
     let stageUsed = false;
     const live = el('div', { class: 'sr-only', role: 'status', 'aria-live': 'polite', 'aria-atomic': 'true' });
@@ -663,9 +903,13 @@
     const soundBtn = KQ.btn(KQ.sound.enabled ? '소리 켬' : '소리 끔', () => {
       const on = KQ.sound.toggle();
       soundBtn.textContent = on ? '소리 켬' : '소리 끔'; soundBtn.setAttribute('aria-pressed', String(on));
-      musicOn = false;
-      if (on && view && view.phase === 'lobby') { KQ.sound.music(true); musicOn = true; }
-    }, 'ghost small', { 'aria-pressed': String(KQ.sound.enabled) });
+      if (on) syncBgm(view, true); else bgmCall('stop');
+    }, 'ghost small', { 'aria-pressed': String(KQ.sound.enabled), title: '효과음과 음악 전체 소리' });
+    const musicLabel = () => (bgmOn() ? '음악 켬' : '음악 끔');
+    const musicBtn = KQ.btn(musicLabel(), () => toggleMusic(), 'ghost small', { 'aria-pressed': String(bgmOn()), title: '배경음악 켜고 끄기' });
+    if (!KQ.bgm) musicBtn.hidden = true;
+    const settingsBtn = KQ.btn('설정', () => openSettings(), 'ghost small', { 'aria-haspopup': 'dialog', title: '진행 중에 바꿀 수 있는 설정' });
+    const qrBtn = KQ.btn('QR', () => openQr(), 'ghost small', { 'aria-haspopup': 'dialog', 'aria-label': '입장 QR 코드 크게 보기' });
     const lockBtn = KQ.btn('잠금', () => act(view && view.locked ? 'unlock' : 'lock', lockBtn), 'ghost small');
     const fsBtn = KQ.btn('전체 화면', () => {
       try {
@@ -686,7 +930,7 @@
       KQ.go('/teacher');
     }
     const topTitle = el('span', { class: 'lv-htop-title' }, '');
-    const top = el('header', { class: 'lv-htop' }, el('a', { href: '/teacher', 'data-link': '', class: 'lv-htop-brand', 'aria-label': '선생님 대시보드로' }, '반짝퀴즈'), topTitle, el('span', { class: 'spacer' }), soundBtn, lockBtn, fsBtn, endBtn, closeBtn);
+    const top = el('header', { class: 'lv-htop' }, el('a', { href: '/teacher', 'data-link': '', class: 'lv-htop-brand', 'aria-label': '선생님 대시보드로' }, '반짝퀴즈'), topTitle, el('span', { class: 'spacer' }), soundBtn, musicBtn, settingsBtn, qrBtn, lockBtn, fsBtn, endBtn, closeBtn);
     const main = el('main', { class: 'lv-hmain' });
     const footPin = el('span', { class: 'lv-hfoot-pin' }, 'PIN ' + fmtPin(pin));
     const footCount = el('span', {}, '');
@@ -698,6 +942,148 @@
 
     function attachStage(slot) { slot.append(stage); stageUsed = true; return slot; }
 
+    // --- 배경음악 (진행자 화면에서만) ---
+    function setTense(on) { on = !!on; if (on !== tenseOn) { tenseOn = on; bgmCall('tense', on); } }
+    function syncBgm(v, force) {
+      if (!v || ended || !KQ.bgm || !bgmOn()) return;
+      if (v.phase === 'finished') { if (force && podiumStarted) bgmCall('play', 'podium'); return; } // 시상식 음악은 단상 등장 뒤에
+      bgmCall('play', v.phase === 'lobby' ? 'lobby' : (v.mode || 'classic'));
+    }
+    function toggleMusic() {
+      if (!KQ.bgm || typeof KQ.bgm.toggle !== 'function') { KQ.toast('배경음악을 불러오지 못했어요.', true); return; }
+      let on;
+      try { on = !!KQ.bgm.toggle(); } catch { on = bgmOn(); }
+      if (on) { tenseOn = false; syncBgm(view, true); } else bgmCall('stop');
+      refreshMusicUI();
+      announce(live, on ? '배경음악을 켰어요' : '배경음악을 껐어요');
+    }
+    function refreshMusicUI() {
+      musicBtn.textContent = musicLabel();
+      musicBtn.setAttribute('aria-pressed', String(bgmOn()));
+      if (settingsUI) settingsUI.refreshMusic();
+    }
+
+    // --- 늦게 온 학생용 큰 QR ---
+    function openQr() {
+      const v = view || { pin };
+      const md = KQ.modal('QR 코드로 들어오기', { wide: true });
+      md.root.classList.add('lv-qr-modal');
+      md.body.append(el('div', { class: 'lv-qr-big' },
+        el('div', { class: 'lv-qr-box' }, qrNode(joinUrlOf(v, pin), 360)),
+        el('div', { class: 'lv-qr-info' },
+          el('p', { class: 'lv-qr-label' }, '휴대폰 카메라로 QR 코드를 찍거나 이 주소로 접속해요'),
+          el('strong', { class: 'lv-qr-addr' }, shortUrl(joinBase(v))),
+          el('p', { class: 'lv-qr-label' }, '게임 PIN'),
+          el('strong', { class: 'lv-qr-pin', 'aria-label': `게임 PIN ${pin.split('').join(' ')}` }, fmtPin(pin)))));
+      md.foot.append(KQ.btn('닫기', () => md.close(), 'primary'));
+    }
+
+    // --- 진행 중 설정 ---
+    const pendingOpts = new Map();
+    function optVal(v, key) {
+      const cur = key === 'locked' ? !!v.locked : (v.options || {})[key];
+      const p = pendingOpts.get(key);
+      if (p && Date.now() - p.at < 4000 && cur !== p.val) return p.val;
+      pendingOpts.delete(key);
+      return cur;
+    }
+    async function sendSettings(patch) {
+      for (const [k, val] of Object.entries(patch)) pendingOpts.set(k, { val, at: Date.now() });
+      try { await hostAct('settings', { options: patch }); }
+      catch (e) { for (const k of Object.keys(patch)) pendingOpts.delete(k); KQ.toast(e.message, true); }
+      if (settingsUI && view) settingsUI.update(view);
+    }
+    async function sendLock(on) {
+      pendingOpts.set('locked', { val: on, at: Date.now() });
+      try { await hostAct(on ? 'lock' : 'unlock'); }
+      catch (e) { pendingOpts.delete('locked'); KQ.toast(e.message, true); }
+      if (settingsUI && view) settingsUI.update(view);
+    }
+    function openSettings() {
+      if (!view || view.phase === 'finished') return;
+      const md = KQ.modal('진행 설정', { onClose: () => { settingsUI = null; } });
+      md.root.classList.add('lv-set-modal');
+      const ui = buildSettings(md);
+      settingsUI = ui;
+      ui.update(view);
+      md.foot.append(KQ.btn('닫기', () => md.close(), 'primary'));
+    }
+    function buildSettings(md) {
+      const segBtns = AUTO_CHOICES.map(s => el('button', { type: 'button', class: 'lv-seg-btn', 'aria-pressed': 'false', onClick: () => { setSeg(s); sendSettings({ autoAdvance: s }); } }, s ? `${s}초` : '끔'));
+      function setSeg(val) { segBtns.forEach((b, i) => { const on = AUTO_CHOICES[i] === val; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); }); }
+      const seg = el('div', { class: 'lv-seg', role: 'group', 'aria-labelledby': 'lv-set-auto-h' }, segBtns);
+      const autoHelp = el('p', { class: 'lv-set-help' }, '정답 공개와 점수판 화면이 이 시간이 지나면 저절로 다음으로 넘어가요. 끄면 선생님이 직접 넘겨요.');
+      const playerNote = el('p', { class: 'notice lv-set-note' }, '이 게임은 시간이 끝날 때까지 자동으로 진행돼요.');
+      const mkCheck = (id, label, help, onChange) => {
+        const input = el('input', { type: 'checkbox', id, 'aria-describedby': help ? id + '-h' : null, onChange: e => onChange(e.target.checked) });
+        const row = el('label', { class: 'lv-opt lv-set-opt', for: id }, input, el('span', {}, el('strong', {}, label), help ? el('small', { id: id + '-h' }, help) : null));
+        return { row, input };
+      };
+      const cShow = mkCheck('lv-set-show', '학생 기기에 문제 보이기', '끄면 학생 기기에는 도형만 보여요. 다음 문제부터 적용돼요.', on => sendSettings({ showOnDevice: on }));
+      const cSkip = mkCheck('lv-set-skip', '학생이 낸 문제는 출제자가 쉬기', '자기가 낸 문제는 풀지 않고 친구들이 푸는 것을 봐요.', on => sendSettings({ skipOwnQuestions: on }));
+      const cNick = mkCheck('lv-set-nick', '닉네임 자동 생성', '로비에서 새로 들어오는 학생에게만 적용돼요.', on => sendSettings({ friendlyNicknames: on }));
+      const cLock = mkCheck('lv-set-lock', '로비 잠금', '잠그면 새 학생이 들어올 수 없어요.', on => sendLock(on));
+      const cMusic = mkCheck('lv-set-music', '배경음악', '진행자 화면에서만 나와요. 학생 기기에서는 효과음만 나요.', on => { if (on !== bgmOn()) toggleMusic(); });
+      const volOut = el('output', { class: 'lv-set-volout', for: 'lv-set-vol' }, '');
+      const vol = el('input', { type: 'range', id: 'lv-set-vol', class: 'lv-range', min: 0, max: 100, step: 5, value: Math.round(bgmVol() * 100), onInput: e => { bgmCall('setVolume', (Number(e.target.value) || 0) / 100); volOut.textContent = e.target.value + '%'; } });
+      const volRow = el('div', { class: 'lv-set-vol' }, el('label', { for: 'lv-set-vol' }, '음량'), vol, volOut);
+      const noBgm = el('p', { class: 'lv-set-help' }, '배경음악 기능을 불러오지 못했어요. 새로고침해 보세요.');
+      function refreshMusic() {
+        const has = !!KQ.bgm;
+        cMusic.input.checked = bgmOn(); cMusic.input.disabled = !has;
+        if (document.activeElement !== vol) vol.value = String(Math.round(bgmVol() * 100));
+        volOut.textContent = vol.value + '%';
+        vol.disabled = !has; noBgm.hidden = has;
+      }
+      add(md.body,
+        el('section', { class: 'lv-set-sec' }, el('h3', { id: 'lv-set-auto-h' }, '결과 자동 넘김'), seg, autoHelp, playerNote),
+        el('section', { class: 'lv-set-sec' }, el('h3', {}, '문제와 참가'), cShow.row, cSkip.row, cNick.row, cLock.row),
+        el('section', { class: 'lv-set-sec' }, el('h3', {}, '배경음악'), cMusic.row, volRow, noBgm));
+      return {
+        refreshMusic,
+        update(v) {
+          const player = v.pacing === 'player';
+          seg.hidden = player; autoHelp.hidden = player; playerNote.hidden = !player;
+          setSeg(Number(optVal(v, 'autoAdvance')) || 0);
+          cShow.input.checked = optVal(v, 'showOnDevice') !== false;
+          cSkip.input.checked = optVal(v, 'skipOwnQuestions') !== false;
+          cNick.input.checked = !!optVal(v, 'friendlyNicknames');
+          cLock.input.checked = !!optVal(v, 'locked');
+          refreshMusic();
+        }
+      };
+    }
+
+    // --- 자동 넘김 표시 (정답 공개 / 점수판) ---
+    function autoPanel(nextBtn, baseLabel) {
+      const fill = el('span', { class: 'lv-auto-fill' });
+      const text = el('span', { class: 'lv-auto-text' }, '');
+      const stopBtn = KQ.btn('자동 넘김 멈추기', async () => {
+        stopBtn.disabled = true;
+        await sendSettings({ autoAdvance: 0 });
+        setTimeout(() => { if (stopBtn.isConnected) stopBtn.disabled = false; }, 600);
+      }, 'ghost small lv-auto-stop');
+      const node = el('div', { class: 'lv-auto', hidden: true }, el('div', { class: 'lv-auto-row' }, text, stopBtn), el('span', { class: 'lv-auto-track', 'aria-hidden': 'true' }, fill));
+      let key = null, total = 1, lastSec = null;
+      const tick = vv => {
+        const on = !!vv.autoAt;
+        node.hidden = !on;
+        const label = on ? '지금 넘기기' : baseLabel;
+        if (nextBtn.textContent !== label) nextBtn.textContent = label;
+        if (!on) { key = null; lastSec = null; return; }
+        const rem = Math.max(0, Number(vv.autoAt) - KQ.now());
+        if (key !== vv.autoAt) {
+          key = vv.autoAt;
+          const conf = (Number(vv.options && vv.options.autoAdvance) || 0) * 1000;
+          total = Math.max(1000, conf && conf >= rem - 800 ? conf : rem);
+        }
+        fill.style.transform = `scaleX(${Math.min(1, rem / total).toFixed(3)})`;
+        const s = Math.ceil(rem / 1000);
+        if (s !== lastSec) { lastSec = s; text.textContent = s > 0 ? `${s}초 후 자동으로 넘어가요` : '넘어가는 중…'; }
+      };
+      return { node, tick };
+    }
+
     function updateChrome(v) {
       topTitle.textContent = [v.quizTitle, v.modeName].filter(Boolean).join(' · ');
       lockBtn.textContent = v.locked ? '잠금 해제' : '잠금';
@@ -705,14 +1091,21 @@
       lockBtn.setAttribute('aria-label', v.locked ? '로비 잠금 해제' : '로비 잠그기');
       footCount.textContent = `참가자 ${num(v.playerCount)}명` + (v.locked ? ' · 잠김' : '');
       endBtn.hidden = v.phase === 'finished';
+      settingsBtn.hidden = v.phase === 'finished';
+      qrBtn.hidden = v.phase === 'finished';
+      if (v.phase === 'finished' && settingsUI) KQ.closeModal(true);
       shell.dataset.phase = v.phase;
       // 새 참가자 소리
       const ids = new Set((v.players || []).map(p => p.id));
-      if (prevIds) { let fresh = 0; for (const id of ids) if (!prevIds.has(id)) fresh++; if (fresh) { KQ.sound.play('join'); if (v.phase !== 'lobby') announce(live, `새 참가자 ${fresh}명`); } }
+      if (prevIds) { let fresh = 0; for (const id of ids) if (!prevIds.has(id)) fresh++; if (fresh) { snd('join'); if (v.phase !== 'lobby') announce(live, `새 참가자 ${fresh}명`); } }
       prevIds = ids;
-      // 로비 음악
-      if (v.phase === 'lobby') { if (!musicOn && KQ.sound.enabled) { KQ.sound.music(true); musicOn = true; } }
-      else if (musicOn) { KQ.sound.music(false); musicOn = false; }
+      // 점수판의 순위 상승 표시용: 문제 직전 순위를 기억
+      const qi = v.questionIndex ?? -1;
+      if (v.phase === 'countdown' || (v.phase === 'question' && preRanksQi !== qi)) {
+        preRanks = new Map((v.players || []).map((p, i) => [p.nickname, i + 1]));
+        preRanksQi = qi;
+      }
+      syncBgm(v);
     }
 
     function apply(v) {
@@ -722,23 +1115,80 @@
       updateChrome(v);
       const s = [v.mode, v.teamsEnabled ? 1 : 0, v.phase, v.question ? v.question.id : '', v.questionIndex ?? ''].join('|');
       if (s !== sig) {
-        sig = s; clearTimeout(fanfareTimer);
+        sig = s; clearLater(); setTense(false);
         screen = buildHost(v);
         main.replaceChildren(screen.node);
         main.scrollTop = 0;
         onEnter(v);
       } else if (screen && screen.update) screen.update(v);
       if (stage.isConnected) modeCall(m, 'renderHost', stage, v);
+      if (settingsUI) settingsUI.update(v);
     }
 
     function onEnter(v) {
       const qn = (v.questionIndex ?? 0) + 1;
-      if (v.phase === 'question') { KQ.sound.play('start'); announce(live, `${qn}번 문제. ${v.question?.text || ''}`); }
-      else if (v.phase === 'reveal') { KQ.sound.play('reveal'); announce(live, `정답 공개. ${v.reveal ? `정답 ${v.reveal.correctCount}명, 응답 ${v.reveal.answered}명` : ''}`); }
-      else if (v.phase === 'leaderboard') { KQ.sound.play('pop'); announce(live, '점수판'); }
-      else if (v.phase === 'running') { KQ.sound.play('start'); announce(live, '게임 시작!'); }
-      else if (v.phase === 'finished') { announce(live, '게임 끝! 시상식'); fanfareTimer = setTimeout(() => KQ.sound.play('fanfare'), 2300); }
+      const fxKey = [v.phase, v.questionIndex ?? '', v.question ? v.question.id : ''].join('|');
+      const first = !fxDone.has(fxKey);
+      fxDone.add(fxKey);
+      if (v.phase === 'question') { snd('start'); announce(live, `${qn}번 문제. ${v.question?.text || ''}`); }
+      else if (v.phase === 'reveal') {
+        snd('reveal');
+        announce(live, `정답 공개. ${v.reveal ? `정답 ${v.reveal.correctCount}명, 응답 ${v.reveal.answered}명` : ''}` + (v.autoAt ? '. 잠시 후 자동으로 넘어가요' : ''));
+        if (first) revealFx(v);
+      }
+      else if (v.phase === 'leaderboard') { snd('whoosh'); announce(live, '점수판' + (v.autoAt ? '. 잠시 후 자동으로 넘어가요' : '')); if (first) leaderboardFx(); }
+      else if (v.phase === 'running') { snd('start'); announce(live, '게임 시작!'); }
+      else if (v.phase === 'finished') { announce(live, '게임 끝! 시상식'); bgmCall('stop'); finishFx(); }
       else if (v.phase === 'lobby') announce(live, '참가자를 기다리는 중');
+    }
+
+    // 정답 공개 효과: 정답 타일 폭죽, 막대 숫자 올라가기, 정답률 80% 이상이면 축하
+    function revealFx(v) {
+      const sc = screen || {};
+      (sc.barCounts || []).forEach(([node, n], i) => later(() => fxCountUp(node, 0, n, 700), i * 80));
+      (sc.fxTargets || []).forEach((t, i) => later(() => fxCall('burst', t, { count: 46 }), 550 + i * 140));
+      const rv = v.reveal || {}, q = v.question || {};
+      const answered = Number(rv.answered) || 0;
+      if (q.type !== 'poll' && answered > 0) {
+        const pct = Math.round((Number(rv.correctCount) || 0) / answered * 100);
+        if (pct >= 80) later(() => { fxCall('confetti', { count: 180, power: 1.2 }); fxCall('stamp', '대단해요!', { color: '#d89e00', sub: `정답률 ${pct}%` }); snd('cheer'); }, 1000);
+      } else if (q.type === 'poll' && sc.fxTargets && sc.fxTargets[0]) later(() => fxCall('stars', sc.fxTargets[0]), 600);
+    }
+    function leaderboardFx() {
+      const sc = screen || {};
+      if (sc.first) later(() => fxCall('stars', sc.first), 900);
+      (sc.ups || []).forEach(({ row, idx }) => later(() => fxCall('burst', row, { count: 24, colors: ['#51cf66', '#ffd43b', '#ffffff'] }), (0.2 + idx * 0.28 + 0.7) * 1000));
+    }
+    // 시상식: 드럼롤 → 3위 → 2위 → 1위 (등장마다 폭죽 + 쿵), 1위에 불꽃놀이·색종이 비·팡파르
+    const POD_DELAY = { 3: 1.9, 2: 3.0, 1: 4.3 };
+    function finishFx() {
+      const sc = screen || {};
+      const base = sc.delayBase || 0;
+      const pods = sc.pods || {};
+      podiumStarted = false;
+      if (sc.banner) later(() => {
+        if (sc.bannerWin) { fxCall('confetti', { count: 170, power: 1.2 }); fxCall('burst', sc.banner, { count: 60 }); snd('cheer'); }
+        else { fxCall('stars', sc.banner); snd('sparkle'); }
+      }, 350);
+      if (sc.teamWin) later(() => { fxCall('burst', sc.teamWin, { count: 70 }); fxCall('stars', sc.teamWin); snd('boom'); }, 650);
+      const any = pods[1] || pods[2] || pods[3];
+      if (any) later(() => snd('drumroll'), base * 1000 + 100);
+      [3, 2, 1].forEach(place => {
+        const who = pods[place];
+        if (!who) return;
+        later(() => {
+          fxCall('burst', who, { count: place === 1 ? 110 : 60 });
+          snd('boom');
+          if (place === 1) {
+            if (sc.node) sc.node.classList.add('lv-spot-on');
+            fxCall('fireworks', 6000);
+            fxCall('rain', 5000);
+            snd('fanfare');
+            later(() => snd('cheer'), 700);
+          }
+        }, (base + POD_DELAY[place] + 0.6) * 1000);
+      });
+      later(() => { podiumStarted = true; if (bgmOn()) bgmCall('play', 'podium'); }, pods[1] ? (base + POD_DELAY[1] + 2.6) * 1000 : 1500);
     }
 
     function buildHost(v) {
@@ -756,14 +1206,14 @@
 
     // --- 로비 ---
     function hostLobby(v) {
-      const url = (v.joinUrls && v.joinUrls[0]) || (KQ.me && KQ.me.addresses && KQ.me.addresses[0]) || location.origin;
-      const urlShort = String(url).replace(/^https?:\/\//, '').replace(/\/$/, '');
+      const urlShort = shortUrl(joinBase(v));
+      const qrUrl = joinUrlOf(v, pin);
       const count = el('div', { class: 'lv-count-num-host' }, '0');
       const startBtn = KQ.btn('시작', () => act('start', startBtn), 'big lv-white-btn lv-start-btn');
       const chipsArea = el('div', { class: 'lv-chips-area' });
       const empty = el('p', { class: 'lv-lobby-empty' }, '참가자를 기다리는 중…');
       const chips = new Map();
-      let teamCols = null;
+      let teamCols = null, ready = false;
       const teamCount = v.teamsEnabled ? ((v.teams && v.teams.length) || (v.options && v.options.teamCount) || 4) : 0;
       if (teamCount) {
         teamCols = [];
@@ -790,29 +1240,37 @@
           seen.add(p.id);
           let c = chips.get(p.id);
           if (!c) {
-            c = el('button', { type: 'button', class: 'lv-chip pop-in', title: '눌러서 내보내기', onClick: async () => {
+            const avBox = el('span', { class: 'lv-chip-av' });
+            const btn = el('button', { type: 'button', class: 'lv-chip lv-chip-pop', title: '눌러서 내보내기', onClick: async () => {
               if (await KQ.confirm(`'${p.nickname}' 학생을 게임에서 내보낼까요?`, '내보내기', true)) act('kick', null, { playerId: p.id });
-            } }, el('span', { class: 'lv-chip-name' }, p.nickname || ''));
-            c.setAttribute('aria-label', `${p.nickname} 내보내기`);
+            } }, avBox, el('span', { class: 'lv-chip-name' }, p.nickname || ''));
+            btn.setAttribute('aria-label', `${p.nickname} 내보내기`);
+            c = { btn, avBox, avk: null };
             chips.set(p.id, c);
+            if (ready) later(() => fxCall('stars', btn), 120);
           }
-          c.classList.toggle('off', p.connected === false);
+          const k = avKey(p.avatar);
+          if (k !== c.avk || !c.avBox.firstChild) { c.avk = k; c.avBox.replaceChildren(avatarNode(p.avatar, 38, p.nickname)); }
+          c.btn.classList.toggle('off', p.connected === false);
           const parent = teamCols ? (teamCols[p.team] || teamCols[0]).body : flat;
-          if (c.parentNode !== parent) parent.append(c);
+          if (c.btn.parentNode !== parent) parent.append(c.btn);
         }
-        for (const [id, c] of chips) if (!seen.has(id)) { c.remove(); chips.delete(id); }
+        for (const [id, c] of chips) if (!seen.has(id)) { c.btn.remove(); chips.delete(id); }
         if (teamCols) teamCols.forEach((t, i) => { t.cnt.textContent = (vv.players || []).filter(p => p.team === i).length + '명'; });
+        ready = true;
       }
       const node = el('div', { class: 'lv-lobby' },
-        el('div', { class: 'lv-join-band' },
-          el('div', { class: 'lv-join-url' }, el('span', { class: 'lv-join-label' }, '참여하려면 접속'), el('strong', { class: 'lv-join-addr' }, urlShort)),
-          el('div', { class: 'lv-join-pin' }, el('span', { class: 'lv-join-label' }, '게임 PIN:'), el('strong', { class: 'lv-join-pin-num', 'aria-label': `게임 PIN ${pin.split('').join(' ')}` }, fmtPin(pin)))),
+        el('div', { class: 'lv-join-band has-qr' },
+          el('div', { class: 'lv-join-qr' }, qrNode(qrUrl, 220), el('span', { class: 'lv-join-qr-cap' }, '카메라로 찍으면 바로 입장')),
+          el('div', { class: 'lv-join-info' },
+            el('div', { class: 'lv-join-url' }, el('span', { class: 'lv-join-label' }, '참여하려면 접속'), el('strong', { class: 'lv-join-addr' }, urlShort)),
+            el('div', { class: 'lv-join-pin' }, el('span', { class: 'lv-join-label' }, '게임 PIN:'), el('strong', { class: 'lv-join-pin-num', 'aria-label': `게임 PIN ${pin.split('').join(' ')}` }, fmtPin(pin))))),
         el('div', { class: 'lv-lobby-bar' },
           el('div', { class: 'lv-count-box', 'aria-live': 'polite' }, count, el('span', {}, '명 참가')),
-          el('div', { class: 'lv-lobby-title' }, el('h1', {}, v.quizTitle || '반짝퀴즈'), el('p', {}, v.modeName || '') , v.locked ? el('span', { class: 'badge orange' }, '잠김: 새 참가 불가') : null),
+          el('div', { class: 'lv-lobby-title' }, el('h1', {}, v.quizTitle || '반짝퀴즈'), el('p', {}, v.modeName || ''), v.locked ? el('span', { class: 'badge orange' }, '잠김: 새 참가 불가') : null),
           startBtn),
         chipsArea,
-        el('p', { class: 'lv-lobby-hint' }, '닉네임을 누르면 그 학생을 내보낼 수 있어요.'));
+        el('p', { class: 'lv-lobby-hint' }, '닉네임을 누르면 그 학생을 내보낼 수 있어요. 상단의 설정에서 자동 넘김과 음악을 바꿀 수 있어요.'));
       update(v);
       return { node, update: vv => {
         update(vv);
@@ -860,7 +1318,8 @@
         ring.setAttribute('stroke-dashoffset', (C * (1 - Math.min(1, rem / total))).toFixed(1));
         timer.classList.toggle('hurry', s <= 5 && s > 0);
         timer.setAttribute('aria-label', `남은 시간 ${s}초`);
-        if (s !== lastS) { if (lastS !== null && s <= 5 && s > 0) KQ.sound.play('tick'); lastS = s; }
+        if (s !== lastS) { if (lastS !== null && s <= 5 && s > 0) snd('tick'); lastS = s; }
+        setTense(s <= 5 && s > 0);
       };
       const update = vv => { answered.textContent = num(vv.answeredCount); expected.textContent = `/ ${num(vv.expectedCount)}`; tick(vv); };
       const center = el('div', { class: 'lv-hq-center' });
@@ -908,24 +1367,35 @@
       const rv = v.reveal || {};
       const classic = v.mode === 'classic';
       const res = el('div', { class: 'lv-rv-body' });
+      const barCounts = [], fxTargets = [];
       if (q.type === 'quiz' || q.type === 'truefalse' || q.type === 'poll') {
         const dist = rv.distribution || [];
         const n = Math.min(4, (q.choices || []).length);
         const max = Math.max(1, ...dist.slice(0, n).map(x => +x || 0));
         const bars = el('div', { class: 'lv-bars', role: 'img', 'aria-label': '보기별 응답 수: ' + Array.from({ length: n }, (_, i) => `${SHAPE_NAMES[i]} ${dist[i] || 0}명`).join(', ') });
+        let topCol = null, topCnt = -1;
         for (let i = 0; i < n; i++) {
           const c = q.choices[i] || {};
           const cnt = +dist[i] || 0;
-          bars.append(el('div', { class: 'lv-bar-col' + (q.type !== 'poll' && c.correct === false ? ' dim' : '') },
-            el('div', { class: 'lv-bar-count' }, String(cnt)),
+          const cntEl = el('div', { class: 'lv-bar-count' }, String(cnt));
+          barCounts.push([cntEl, cnt]);
+          const col = el('div', { class: 'lv-bar-col' + (q.type !== 'poll' && c.correct === false ? ' dim' : '') + (q.type !== 'poll' && c.correct === true ? ' good' : '') },
+            cntEl,
             el('div', { class: `lv-bar shape-${i}`, style: { height: Math.max(4, cnt / max * 100) + '%', animationDelay: (i * 0.08) + 's' } }),
-            el('div', { class: `lv-bar-foot shape-${i}` }, shape(i, 26), c.correct === true && q.type !== 'poll' ? checkIcon(24) : null)));
+            el('div', { class: `lv-bar-foot shape-${i}` }, shape(i, 26), c.correct === true && q.type !== 'poll' ? checkIcon(24) : null));
+          if (cnt > topCnt) { topCnt = cnt; topCol = col; }
+          bars.append(col);
         }
-        res.append(bars, hostTiles(q, true));
+        const tiles = hostTiles(q, true);
+        res.append(bars, tiles);
+        if (q.type === 'poll') { if (topCol) fxTargets.push(topCol); }
+        else tiles.querySelectorAll('.lv-htile.correct').forEach(t => fxTargets.push(t));
       } else if (q.type === 'type') {
         const typed = rv.typed || [];
-        res.append(el('div', { class: 'lv-rv-accepted' }, el('span', {}, '정답: '), el('strong', {}, (q.accepted || []).join(', ') || '-')),
-          el('ul', { class: 'lv-typed' }, typed.length ? typed.slice(0, 8).map(t => el('li', { class: t.correct ? 'ok' : '' }, el('span', { class: 'lv-typed-text' }, t.text || ''), el('span', { class: 'lv-typed-count' }, `${t.count || 0}명`), t.correct ? checkIcon(22) : null)) : el('li', {}, '입력된 답이 없어요')));
+        const acc = el('div', { class: 'lv-rv-accepted' }, el('span', {}, '정답: '), el('strong', {}, (q.accepted || []).join(', ') || '-'));
+        const ul = el('ul', { class: 'lv-typed' }, typed.length ? typed.slice(0, 8).map(t => el('li', { class: t.correct ? 'ok' : '' }, el('span', { class: 'lv-typed-text' }, t.text || ''), el('span', { class: 'lv-typed-count' }, `${t.count || 0}명`), t.correct ? checkIcon(22) : null)) : el('li', {}, '입력된 답이 없어요'));
+        res.append(acc, ul);
+        fxTargets.push(acc);
       } else if (q.type === 'slider') {
         const sl = q.slider || {};
         const span = (+sl.max - +sl.min) || 1;
@@ -934,44 +1404,78 @@
           sl.tolerance ? el('div', { class: 'lv-slider-tol', style: { left: pos(+sl.answer - +sl.tolerance), width: `calc(${pos(+sl.answer + +sl.tolerance)} - ${pos(+sl.answer - +sl.tolerance)})` } }) : null,
           sl.answer !== undefined ? el('div', { class: 'lv-slider-mark ans', style: { left: pos(sl.answer) } }, el('span', {}, '정답')) : null,
           rv.sliderAverage !== undefined && rv.sliderAverage !== null ? el('div', { class: 'lv-slider-mark avg', style: { left: pos(rv.sliderAverage) } }, el('span', {}, '평균')) : null);
+        const big = el('div', { class: 'lv-rv-big' }, el('span', {}, '정답 '), el('strong', {}, String(sl.answer ?? '-')), sl.tolerance ? el('small', {}, ` (±${sl.tolerance} 인정)`) : null);
         res.append(el('div', { class: 'lv-rv-slider' },
-          el('div', { class: 'lv-rv-big' }, el('span', {}, '정답 '), el('strong', {}, String(sl.answer ?? '-')), sl.tolerance ? el('small', {}, ` (±${sl.tolerance} 인정)`) : null),
+          big,
           el('div', { class: 'lv-rv-avg' }, '반 평균 ', el('strong', {}, rv.sliderAverage === null || rv.sliderAverage === undefined ? '-' : String(Math.round(rv.sliderAverage * 100) / 100))),
           scale, el('div', { class: 'lv-slider-ends' }, el('span', {}, String(sl.min ?? 0)), el('span', {}, String(sl.max ?? 100)))));
+        fxTargets.push(big);
       } else if (q.type === 'puzzle') {
         const order = q.puzzleOrder || (q.choices || []).map(c => c.text);
-        res.append(el('p', { class: 'lv-rv-label' }, '정답 순서'), el('ol', { class: 'lv-hq-puzzle answer' }, order.map((t, i) => el('li', { class: `shape-${i % 4}` }, String(t || '')))));
+        const ol = el('ol', { class: 'lv-hq-puzzle answer' }, order.map((t, i) => el('li', { class: `shape-${i % 4}` }, String(t || ''))));
+        res.append(el('p', { class: 'lv-rv-label' }, '정답 순서'), ol);
+        fxTargets.push(ol);
       }
       const poll = q.type === 'poll';
-      const summary = el('div', { class: 'lv-rv-summary' }, poll ? `응답 ${num(rv.answered)}명` : `정답 ${num(rv.correctCount)}명 / 응답 ${num(rv.answered)}명`);
+      const answered = Number(rv.answered) || 0;
+      const pct = answered ? Math.round((Number(rv.correctCount) || 0) / answered * 100) : 0;
+      const summary = el('div', { class: 'lv-rv-summary' }, poll ? `응답 ${num(rv.answered)}명` : `정답 ${num(rv.correctCount)}명 / 응답 ${num(rv.answered)}명` + (answered ? ` · 정답률 ${pct}%` : ''));
       const last = (v.questionIndex ?? 0) + 1 >= (v.questionCount || 0);
-      const nextBtn = KQ.btn(classic ? '다음' : (last ? '결과 보기' : '다음'), () => act('next', nextBtn), 'big lv-white-btn lv-next-btn');
+      const baseLabel = classic ? '다음' : (last ? '결과 보기' : '다음');
+      const nextBtn = KQ.btn(baseLabel, () => act('next', nextBtn), 'big lv-white-btn lv-next-btn');
+      const auto = autoPanel(nextBtn, baseLabel);
       const node = el('div', { class: 'lv-rv' + (classic ? '' : ' with-stage') },
         el('div', { class: 'lv-q-band small' },
           el('div', { class: 'lv-q-meta' }, el('span', { class: 'badge purple' }, `${(v.questionIndex ?? 0) + 1} / ${v.questionCount || '?'}`), q.authorName ? el('span', { class: 'badge green' }, '학생 출제: ' + q.authorName) : null),
           el('h1', { class: 'lv-q-band-text' }, q.text || '')),
         el('div', { class: 'lv-rv-grid' },
-          el('div', { class: 'lv-rv-left' }, res, el('div', { class: 'lv-rv-actions' }, summary, nextBtn)),
+          el('div', { class: 'lv-rv-left' }, res, el('div', { class: 'lv-rv-actions' }, summary, auto.node, nextBtn)),
           classic ? null : attachStage(el('div', { class: 'lv-stage-slot big' }))));
-      return { node };
+      auto.tick(v);
+      return { node, tick: auto.tick, update: auto.tick, barCounts, fxTargets };
     }
 
     // --- 점수판 (클래식) ---
     function hostLeaderboard(v) {
       const rows = (v.leaderboard || []).slice(0, 5);
       const max = Math.max(1, ...rows.map(r => +r.score || 0));
+      const qi = v.questionIndex ?? 0;
+      const usePre = !!(preRanks && preRanksQi === qi && qi > 0);
       const list = el('ol', { class: 'lv-lb' });
-      rows.forEach((r, i) => list.append(el('li', { class: 'lv-lb-row', style: { animationDelay: (0.2 + i * 0.28) + 's' } },
-        el('span', { class: 'lv-lb-rank' }, String(r.rank || i + 1)),
-        el('span', { class: 'lv-lb-name' }, r.nickname || ''),
-        r.streak >= 2 ? el('span', { class: 'lv-lb-streak' }, el('span', { class: 'lv-flame', 'aria-hidden': 'true' }), `연속 정답 ${r.streak}`) : null,
-        r.delta ? el('span', { class: 'lv-lb-delta' }, '+' + num(r.delta)) : null,
-        el('span', { class: 'lv-lb-score' }, num(r.score)),
-        el('span', { class: 'lv-lb-fill', style: { width: Math.max(8, (+r.score || 0) / max * 100) + '%' }, 'aria-hidden': 'true' }))));
+      let first = null;
+      const ups = [];
+      rows.forEach((r, i) => {
+        const rank = r.rank || i + 1;
+        let up = 0;
+        if (usePre) { const pr = preRanks.get(r.nickname); if (pr && pr > rank) up = pr - rank; }
+        else if (qi > 0 && Number(r.prevRank) > rank) up = Number(r.prevRank) - rank;
+        const isFirst = rank === 1;
+        const delay = 0.2 + i * 0.28;
+        const row = el('li', { class: 'lv-lb-row' + (isFirst ? ' lv-lb-first' : '') + (up ? ' lv-lb-up' : ''), style: { animationDelay: delay + 's', '--lv-rd': delay + 's' } },
+          el('span', { class: 'lv-lb-rank' }, String(rank)),
+          el('span', { class: 'lv-lb-avwrap' }, isFirst ? el('span', { class: 'lv-lb-crown' }, crownIcon(34)) : null, avatarNode(r.avatar, 46, r.nickname, 'lv-lb-av')),
+          el('span', { class: 'lv-lb-name' }, r.nickname || ''),
+          up ? el('span', { class: 'lv-lb-upbadge' }, arrowUpIcon(18), el('span', {}, `${up}계단`)) : null,
+          r.streak >= 2 ? el('span', { class: 'lv-lb-streak' }, el('span', { class: 'lv-flame', 'aria-hidden': 'true' }), `연속 정답 ${r.streak}`) : null,
+          r.delta ? el('span', { class: 'lv-lb-delta' }, '+' + num(r.delta)) : null,
+          el('span', { class: 'lv-lb-score' }, num(r.score)),
+          el('span', { class: 'lv-lb-fill', style: { width: Math.max(8, (+r.score || 0) / max * 100) + '%' }, 'aria-hidden': 'true' }));
+        if (isFirst && !first) first = row;
+        if (up) ups.push({ row, idx: i });
+        list.append(row);
+      });
       if (!rows.length) list.append(el('li', { class: 'lv-lb-row' }, el('span', { class: 'lv-lb-name' }, '아직 점수가 없어요')));
       const last = (v.questionIndex ?? 0) + 1 >= (v.questionCount || 0);
-      const nextBtn = KQ.btn(last ? '결과 보기' : '다음 문제', () => act('next', nextBtn), 'big lv-white-btn lv-next-btn');
-      return { node: el('div', { class: 'lv-hlb' }, el('div', { class: 'lv-title-band' }, el('h1', {}, '점수판')), list, el('div', { class: 'lv-rv-actions' }, el('span', { class: 'lv-rv-summary' }, `${(v.questionIndex ?? 0) + 1} / ${v.questionCount || '?'} 문제 완료`), nextBtn)) };
+      const baseLabel = last ? '결과 보기' : '다음 문제';
+      const nextBtn = KQ.btn(baseLabel, () => act('next', nextBtn), 'big lv-white-btn lv-next-btn');
+      const auto = autoPanel(nextBtn, baseLabel);
+      auto.tick(v);
+      const node = el('div', { class: 'lv-hlb' },
+        el('div', { class: 'lv-title-band' }, el('h1', {}, '점수판')),
+        list,
+        el('p', { class: 'sr-only' }, rows.map(r => `${r.rank}위 ${r.nickname} ${r.score}점`).join(', ')),
+        el('div', { class: 'lv-rv-actions' }, el('span', { class: 'lv-rv-summary' }, `${(v.questionIndex ?? 0) + 1} / ${v.questionCount || '?'} 문제 완료`), auto.node, nextBtn));
+      return { node, tick: auto.tick, update: auto.tick, first, ups };
     }
 
     // --- 각자 속도 진행 중 ---
@@ -981,7 +1485,7 @@
       const feed = el('ul', { class: 'lv-feed', 'aria-live': 'polite', 'aria-label': '실시간 소식' });
       const finishBtn = KQ.btn('게임 끝내기', async () => { if (await KQ.confirm('지금 게임을 끝내고 시상대로 갈까요?', '게임 끝내기', true)) act('end', finishBtn); }, 'lv-white-btn');
       let lastFeedKey = '';
-      const tick = vv => { const s = KQ.secondsLeft(vv.endsAt); clock.textContent = fmtClock(s); clock.classList.toggle('hurry', s <= 10); clock.setAttribute('aria-label', `남은 시간 ${fmtClock(s)}`); };
+      const tick = vv => { const s = KQ.secondsLeft(vv.endsAt); setTense(s <= 5 && s > 0); clock.textContent = fmtClock(s); clock.classList.toggle('hurry', s <= 10); clock.setAttribute('aria-label', `남은 시간 ${fmtClock(s)}`); };
       const update = vv => {
         tick(vv);
         count.textContent = `참가자 ${num(vv.playerCount)}명`;
@@ -999,30 +1503,47 @@
     }
 
     // --- 시상대 ---
+    function podTeamColor(v, p) {
+      if (!v.teamsEnabled || p.team === undefined || p.team === null) return null;
+      if (typeof p.team === 'number') return teamInfo(v.teams, p.team).color;
+      const t = (v.teams || []).find(x => x && x.name === p.team) || TEAM_DEFAULT.find(x => x.name === p.team);
+      return t ? t.color : null;
+    }
     function hostFinished(v) {
       const pod = (v.podium || []).slice().sort((a, b) => (a.rank || 99) - (b.rank || 99)).slice(0, 5);
-      const parts = [el('div', { class: 'lv-title-band' }, el('h1', {}, v.quizTitle || '최종 결과'), el('p', {}, (v.modeName || '') + ' · 시상식'))];
+      const parts = [el('div', { class: 'lv-spotlight', 'aria-hidden': 'true' }), el('div', { class: 'lv-title-band' }, el('h1', {}, v.quizTitle || '최종 결과'), el('p', {}, (v.modeName || '') + ' · 시상식'))];
+      let banner = null, bannerWin = false, teamWin = null;
       if (COOP.has(v.mode) && v.modeState && v.modeState.status) {
         const st = v.modeState.status;
         const win = st === 'success' || st === 'victory', lose = st === 'failed' || st === 'defeat';
-        if (win || lose) parts.push(el('div', { class: 'lv-coop-banner ' + (win ? 'good' : 'bad') + ' pop-in', role: 'status' }, win ? '반 전체 미션 성공!' : '아쉽게 미션 실패', el('small', {}, win ? '모두 힘을 모아 해냈어요' : '다음엔 꼭 성공해요')));
+        if (win || lose) {
+          banner = el('div', { class: 'lv-coop-banner ' + (win ? 'good' : 'bad') + ' pop-in', role: 'status' }, win ? '반 전체 미션 성공!' : '아쉽게 미션 실패', el('small', {}, win ? '모두 힘을 모아 해냈어요' : '다음엔 꼭 성공해요'));
+          bannerWin = win;
+          parts.push(banner);
+        }
       }
       const teamsSorted = v.teamsEnabled && Array.isArray(v.teams) ? v.teams.slice().sort((a, b) => (b.score || 0) - (a.score || 0)) : [];
       if (teamsSorted.length) {
-        parts.push(el('div', { class: 'lv-team-result' }, teamsSorted.map((t, i) => el('div', { class: 'lv-team-res pop-in' + (i === 0 ? ' win' : ''), style: { '--lv-team': t.color || teamInfo(null, t.index).color, animationDelay: (i * 0.15) + 's' } },
-          el('span', { class: 'lv-team-res-rank' }, `${i + 1}위`), el('span', { class: 'lv-team-res-name' }, t.name || teamInfo(null, t.index).name), el('span', { class: 'lv-team-res-score' }, num(t.score))))));
+        const res = teamsSorted.map((t, i) => el('div', { class: 'lv-team-res pop-in' + (i === 0 ? ' win' : ''), style: { '--lv-team': t.color || teamInfo(null, t.index).color, animationDelay: (i * 0.15) + 's' } },
+          i === 0 ? el('span', { class: 'lv-team-crown' }, crownIcon(30)) : null,
+          el('span', { class: 'lv-team-res-rank' }, `${i + 1}위`), el('span', { class: 'lv-team-res-name' }, t.name || teamInfo(null, t.index).name), el('span', { class: 'lv-team-res-score' }, num(t.score))));
+        teamWin = res[0];
+        parts.push(el('div', { class: 'lv-team-result' }, res));
       }
       const delayBase = teamsSorted.length ? 0.8 : 0;
+      const pods = {};
       const block = (p, place) => {
-        const delay = delayBase + ({ 3: 0.4, 2: 1.3, 1: 2.2 })[place];
+        const delay = delayBase + POD_DELAY[place];
         if (!p) return el('div', { class: `lv-pod lv-pod-${place} empty` });
-        const tc = p.team !== undefined && p.team !== null && v.teamsEnabled ? teamInfo(v.teams, p.team).color : null;
-        return el('div', { class: `lv-pod lv-pod-${place}`, style: { '--lv-delay': delay + 's' } },
-          el('div', { class: 'lv-pod-who' }, el('span', { class: 'lv-pod-name' }, p.nickname || ''), el('span', { class: 'lv-pod-score' }, num(p.score) + '점'), tc ? el('span', { class: 'lv-pod-team', style: { background: tc } }) : null),
-          el('div', { class: 'lv-pod-block' }, el('span', { class: 'lv-pod-rank' }, String(place))));
+        const tc = podTeamColor(v, p);
+        const who = el('div', { class: 'lv-pod-who' },
+          el('span', { class: 'lv-pod-avwrap' }, place === 1 ? el('span', { class: 'lv-pod-crown' }, crownIcon(60)) : null, avatarNode(p.avatar, 112, p.nickname, 'lv-pod-av')),
+          el('span', { class: 'lv-pod-name' }, p.nickname || ''), el('span', { class: 'lv-pod-score' }, num(p.score) + '점'), tc ? el('span', { class: 'lv-pod-team', style: { background: tc } }) : null);
+        pods[place] = who;
+        return el('div', { class: `lv-pod lv-pod-${place}`, style: { '--lv-delay': delay + 's' } }, who, el('div', { class: 'lv-pod-block' }, el('span', { class: 'lv-pod-rank' }, String(place))));
       };
       parts.push(el('div', { class: 'lv-podium', 'aria-hidden': 'true' }, block(pod[1], 2), block(pod[0], 1), block(pod[2], 3)));
-      if (pod.length > 3) parts.push(el('ol', { class: 'lv-pod-rest', start: 4 }, pod.slice(3).map((p, i) => el('li', { style: { animationDelay: (delayBase + 3 + i * 0.2) + 's' } }, el('span', { class: 'lv-lb-rank' }, String(p.rank || i + 4)), el('span', { class: 'lv-lb-name' }, p.nickname || ''), el('span', { class: 'lv-lb-score' }, num(p.score))))));
+      if (pod.length > 3) parts.push(el('ol', { class: 'lv-pod-rest', start: 4 }, pod.slice(3).map((p, i) => el('li', { style: { animationDelay: (delayBase + POD_DELAY[1] + 1.2 + i * 0.2) + 's' } }, el('span', { class: 'lv-lb-rank' }, String(p.rank || i + 4)), avatarNode(p.avatar, 36, p.nickname, 'lv-rest-av'), el('span', { class: 'lv-lb-name' }, p.nickname || ''), el('span', { class: 'lv-lb-score' }, num(p.score))))));
       if (!pod.length) parts.push(el('p', { class: 'lv-lobby-empty' }, '참가한 학생이 없어요.'));
       // 시상 순서를 화면 낭독기에도 전달
       parts.push(el('p', { class: 'sr-only' }, pod.map(p => `${p.rank}위 ${p.nickname} ${p.score}점`).join(', ')));
@@ -1033,13 +1554,15 @@
         KQ.btn('리포트 보기', () => KQ.go(v.reportId ? '/teacher/reports/' + encodeURIComponent(v.reportId) : '/teacher/reports'), 'lv-white-btn'),
         KQ.btn('같은 퀴즈로 다시', () => KQ.go(quizId ? '/teacher/host/' + encodeURIComponent(quizId) : '/teacher'), 'lv-white-btn'),
         KQ.btn('게임 닫기', closeGame, 'danger')));
-      return { node: el('div', { class: 'lv-fin' }, parts) };
+      const node = el('div', { class: 'lv-fin' }, parts);
+      return { node, pods, banner, bannerWin, teamWin, delayBase };
     }
 
     function onGone(status) {
       if (ended) return;
       ended = true;
-      if (musicOn) { KQ.sound.music(false); musicOn = false; }
+      clearLater(); bgmCall('stop'); fxCall('stop');
+      if (settingsUI) KQ.closeModal(true);
       if (stageUsed) modeCall(m, 'dispose', stage);
       if (status === 401 || status === 403) { KQ.go('/teacher', true); return; }
       footConn.textContent = '연결 끊김';
@@ -1054,8 +1577,9 @@
     });
     KQ.onLeave(() => {
       ended = true;
-      clearInterval(timer); clearTimeout(fanfareTimer); stream.close();
-      KQ.sound.music(false); musicOn = false;
+      clearInterval(timer); clearLater(); stream.close();
+      bgmCall('stop'); fxCall('stop');
+      settingsUI = null;
       document.removeEventListener('fullscreenchange', onFs);
       if (stageUsed) modeCall(m, 'dispose', stage);
     });

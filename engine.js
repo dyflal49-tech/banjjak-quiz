@@ -106,8 +106,33 @@ function readOptions(o = {}, mode) {
   return {
     randomizeQuestions: !!o.randomizeQuestions, randomizeAnswers: !!o.randomizeAnswers, showOnDevice: o.showOnDevice !== false,
     friendlyNicknames: !!o.friendlyNicknames, skipOwnQuestions: o.skipOwnQuestions !== false,
-    teamCount: mode.teams ? int(o.teamCount, 2, 4, 4) : 0, duration: int(o.duration, 60, 1800, 300), goal: int(o.goal, 5, 50, 15)
+    teamCount: mode.teams ? int(o.teamCount, 2, 4, 4) : 0, duration: int(o.duration, 60, 1800, 300), goal: int(o.goal, 5, 50, 15),
+    autoAdvance: AUTO_STEPS.includes(Number(o.autoAdvance)) ? Number(o.autoAdvance) : 10
   };
+}
+const AUTO_STEPS = [0, 5, 10, 15, 20];
+// 캐릭터: c 캐릭터 0~9, k 색 0~11, h 머리 0~7, f 얼굴 0~5, b 배경 0~7
+function normAvatar(a) {
+  if (!a || typeof a !== 'object') return null;
+  const r = (v, max) => { const n = Math.round(Number(v)); return Number.isFinite(n) ? Math.min(max, Math.max(0, n)) : 0; };
+  return { c: r(a.c, 9), k: r(a.k, 11), h: r(a.h, 7), f: r(a.f, 5), b: r(a.b, 7) };
+}
+// 결과 자동 넘김
+function clearAuto(g) { if (g.autoTimer) clearTimeout(g.autoTimer); g.autoTimer = null; g.autoAt = null; }
+function scheduleAuto(g, msLeft) {
+  clearAuto(g);
+  const sec = Number(g.options.autoAdvance) || 0;
+  if (g.pacing !== 'host' || !sec || !['reveal', 'leaderboard'].includes(g.phase)) return;
+  const ms = msLeft !== undefined ? Math.max(0, msLeft) : sec * 1000;
+  g.autoAt = now() + ms;
+  const phase = g.phase, qi = g.qIndex;
+  g.autoTimer = setTimeout(() => { g.autoTimer = null; g.autoAt = null; if (g.phase !== phase || g.qIndex !== qi) return; try { hostNext(g); } catch (e) { console.error('자동 넘김 오류', e.message); } }, ms);
+}
+function applySettings(g, o = {}) {
+  if (g.phase === 'finished') fail(409, '끝난 게임은 설정을 바꿀 수 없어요.');
+  if (o.autoAdvance !== undefined) { const v = Number(o.autoAdvance); if (!AUTO_STEPS.includes(v)) fail(400, '자동 넘김은 끔, 5초, 10초, 15초, 20초 중에서 골라요.'); g.options.autoAdvance = v; scheduleAuto(g); }
+  for (const k of ['showOnDevice', 'skipOwnQuestions', 'friendlyNicknames']) if (typeof o[k] === 'boolean') g.options[k] = o[k];
+  touch(g);
 }
 function prepareQuestion(q, opts) {
   const n = q.choices.length; let perm = [...Array(n).keys()];
@@ -277,7 +302,7 @@ function reveal(g) {
   }
   const ranked = ranking(g);
   for (const p of ranked) {
-    if (!p.result) continue; p.result.rank = p.rank;
+    if (!p.result) continue; p.result.rank = p.rank; p.result.prevRank = p.lastRank ?? null; p.boardPrevRank = p.lastRank ?? null; p.lastRank = p.rank;
     if (!p.result.message) {
       if (g.mode === 'kingdom' && p.actions) p.result.message = `땅을 ${p.actions.remaining}칸 차지할 수 있어요! 지도를 눌러요.`;
       else if (g.mode === 'space' && p.actions) p.result.message = `에너지 ${p.actions.remaining}개를 행성으로 보내요!`;
@@ -286,10 +311,11 @@ function reveal(g) {
     }
   }
   g.stats[g.qIndex] = { questionId: q.id, text: q.text, type: q.type, answered: answeredList.length, correct: correctCount, expected: expected.length };
+  scheduleAuto(g);
   touch(g);
 }
 function advance(g) {
-  clearTimer(g);
+  clearTimer(g); clearAuto(g);
   for (const p of g.players.values()) { p.actions = null; }
   if (g.qIndex + 1 < g.questions.length) { g.qIndex++; g.phase = 'countdown'; g.endsAt = now() + 3000; setTimer(g, 3000, () => startQuestion(g)); touch(g); }
   else finish(g);
@@ -297,7 +323,8 @@ function advance(g) {
 function hostNext(g) {
   if (g.phase === 'lobby') return startGame(g);
   if (g.phase === 'question') return reveal(g);
-  if (g.phase === 'reveal') { if (g.mode === 'classic') { g.phase = 'leaderboard'; for (const p of g.players.values()) p.actions = null; touch(g); return; } return advance(g); }
+  clearAuto(g);
+  if (g.phase === 'reveal') { if (g.mode === 'classic') { g.phase = 'leaderboard'; for (const p of g.players.values()) p.actions = null; scheduleAuto(g); touch(g); return; } return advance(g); }
   if (g.phase === 'leaderboard') return advance(g);
 }
 // 각자 속도로 진행하는 모드
@@ -339,9 +366,9 @@ function playerAnswer(g, p, q, ev, elapsed) {
   }
   if (g.mode !== 'tower' && points > 0) p.reachedAt = now();
   g.resultSeq++;
-  p.result = { seq: g.resultSeq, correct: ev.correct, points, streak: p.streak, lostStreak, answerText: answerText(q), message };
+  p.result = { seq: g.resultSeq, correct: ev.correct, points, streak: p.streak, lostStreak, answerText: answerText(q), message, prevRank: p.lastRank ?? null };
   if (g.mode !== 'treasure' || !ev.correct) nextPersonalQuestion(g, p); else p.currentQ = null;
-  ranking(g); p.result.rank = p.rank;
+  ranking(g); p.result.rank = p.rank; p.lastRank = p.rank;
 }
 function finishLine(g, p) {
   const done = activePlayers(g).filter(x => x.finishedRank).length;
@@ -362,7 +389,7 @@ function openChest(g, p, choice) {
   g.ms.events.unshift({ nickname: p.nickname, text }); g.ms.events.length = Math.min(g.ms.events.length, 10);
   if (gain >= 500 || text.startsWith('나눔')) addFeed(g, p.nickname, text);
   g.resultSeq++; ranking(g);
-  p.result = { seq: g.resultSeq, correct: true, points: gain, streak: p.streak, answerText: '', message: text, rank: p.rank, chest: Number(choice) };
+  p.result = { seq: g.resultSeq, correct: true, points: gain, streak: p.streak, answerText: '', message: text, rank: p.rank, prevRank: p.lastRank ?? null, chest: Number(choice) }; p.lastRank = p.rank;
   nextPersonalQuestion(g, p);
 }
 function claimTile(g, p, target) {
@@ -382,7 +409,7 @@ function launchEnergy(g, p, target) {
   if (!p.actions.remaining) p.actions = null;
 }
 function finish(g) {
-  if (g.phase === 'finished') return; clearTimer(g);
+  if (g.phase === 'finished') return; clearTimer(g); clearAuto(g);
   if (g.pacing === 'host' && g.phase === 'question') reveal(g);
   g.phase = 'finished'; g.endsAt = null;
   for (const p of g.players.values()) { p.actions = null; p.currentQ = null; }
@@ -404,10 +431,10 @@ function saveReport(g) {
 }
 
 // 플레이어 참가와 답 제출
-function joinGame(g, deviceKey, nickname) {
+function joinGame(g, deviceKey, nickname, avatar) {
   if (g.kicked.has(deviceKey)) fail(403, '진행자가 이 기기를 게임에서 내보냈어요.');
   const existing = [...g.players.values()].find(p => p.deviceKey === deviceKey);
-  if (existing) return existing;
+  if (existing) { const av = normAvatar(avatar); if (av && g.phase === 'lobby') { existing.avatar = av; touch(g); } return existing; }
   if (g.phase === 'finished') fail(409, '이미 끝난 게임이에요.');
   if (g.locked) fail(423, '진행자가 게임을 잠갔어요. 선생님께 말씀드리세요.');
   if (g.players.size >= 300) fail(409, '참가 인원이 가득 찼어요.');
@@ -420,7 +447,7 @@ function joinGame(g, deviceKey, nickname) {
     if (taken(nick)) fail(409, '이미 사용 중인 닉네임이에요. 다른 닉네임을 정해 주세요.');
   }
   const p = {
-    id: crypto.randomBytes(6).toString('hex'), deviceKey, nickname: nick, team: g.teams ? teamFor(g) : null, score: 0, correct: 0, answered: 0, streak: 0, delta: 0,
+    id: crypto.randomBytes(6).toString('hex'), deviceKey, nickname: nick, avatar: normAvatar(avatar), team: g.teams ? teamFor(g) : null, score: 0, correct: 0, answered: 0, streak: 0, delta: 0,
     joinedAt: now(), reachedAt: now(), conns: 0, result: null, actions: null, rank: 0,
     pos: 0, dist: 0, lastBoost: 0, height: 0, blocks: [], color: MARBLE_COLORS[g.players.size % MARBLE_COLORS.length], turbo: false, lockedUntil: null, finishedRank: null, currentQ: null
   };
@@ -478,8 +505,8 @@ function modeStateView(g) {
   if (g.mode === 'submarine' || g.mode === 'garden' || g.mode === 'boss') return { ...ms };
   return {};
 }
-function podium(g) { return ranking(g).slice(0, 5).map(p => ({ rank: p.rank, nickname: p.nickname, score: p.score, team: g.teams ? g.teams[p.team].name : null })); }
-function leaderboard(g) { return ranking(g).slice(0, 5).map(p => ({ rank: p.rank, nickname: p.nickname, score: p.score, delta: p.delta || 0, streak: p.streak })); }
+function podium(g) { return ranking(g).slice(0, 5).map(p => ({ rank: p.rank, nickname: p.nickname, score: p.score, team: g.teams ? g.teams[p.team].name : null, avatar: p.avatar || null })); }
+function leaderboard(g) { return ranking(g).slice(0, 5).map(p => ({ rank: p.rank, nickname: p.nickname, score: p.score, delta: p.delta || 0, streak: p.streak, avatar: p.avatar || null, prevRank: p.boardPrevRank ?? null })); }
 function hostView(g) {
   const q = g.pacing === 'host' && g.qIndex >= 0 && ['question', 'reveal', 'leaderboard'].includes(g.phase) ? g.questions[g.qIndex] : null;
   const revealed = g.phase === 'reveal' || g.phase === 'leaderboard';
@@ -495,7 +522,7 @@ function hostView(g) {
   return {
     role: 'host', pin: g.pin, quizId: g.quizId, mode: g.mode, modeName: g.modeName, pacing: g.pacing, teamsEnabled: !!g.teams, quizTitle: g.quizTitle, phase: g.phase, serverNow: now(),
     joinUrls: addresses().length ? addresses() : [`http://localhost:${PORT}`], locked: g.locked, options: g.options, reportId: g.reportId,
-    players: ranked.map(p => ({ id: p.id, nickname: p.nickname, team: p.team, score: p.score, correct: p.correct, connected: p.conns > 0, answered: g.answers.has(p.id) })), playerCount: ranked.length,
+    players: ranked.map(p => ({ id: p.id, nickname: p.nickname, team: p.team, score: p.score, correct: p.correct, connected: p.conns > 0, answered: g.answers.has(p.id), avatar: p.avatar || null })), playerCount: ranked.length, autoAt: g.autoAt || null,
     teams: teamSummary(g), questionIndex: g.qIndex, questionCount: g.questions.length,
     question: q ? hostQuestion(g, q, revealed) : null, endsAt: g.endsAt,
     answeredCount: g.phase === 'question' ? g.answers.size : (rev?.answered ?? 0), expectedCount: g.phase === 'question' ? expectedPlayers(g).length : 0,
@@ -505,10 +532,10 @@ function hostView(g) {
 }
 function playerView(g, deviceKey) {
   const p = [...g.players.values()].find(x => x.deviceKey === deviceKey);
-  const base = { role: 'player', pin: g.pin, mode: g.mode, modeName: g.modeName, pacing: g.pacing, phase: g.phase, serverNow: now(), quizTitle: g.quizTitle, kicked: g.kicked.has(deviceKey), endsAt: g.endsAt, modeState: modeStateView(g) };
+  const base = { role: 'player', pin: g.pin, mode: g.mode, modeName: g.modeName, pacing: g.pacing, phase: g.phase, serverNow: now(), quizTitle: g.quizTitle, kicked: g.kicked.has(deviceKey), endsAt: g.endsAt, autoAt: g.autoAt || null, modeState: modeStateView(g) };
   if (!p) return { ...base, me: null, question: null, answered: false, result: null, actions: null, leaderboard: [], podium: g.phase === 'finished' ? podium(g) : [] };
   ranking(g);
-  const me = { id: p.id, nickname: p.nickname, team: p.team, teamName: g.teams ? g.teams[p.team].name : null, teamColor: g.teams ? g.teams[p.team].color : null, score: p.score, rank: p.rank, streak: p.streak, correct: p.correct, answered: p.answered, playerCount: g.players.size };
+  const me = { id: p.id, nickname: p.nickname, team: p.team, teamName: g.teams ? g.teams[p.team].name : null, teamColor: g.teams ? g.teams[p.team].color : null, score: p.score, rank: p.rank, streak: p.streak, correct: p.correct, answered: p.answered, playerCount: g.players.size, avatar: p.avatar || null };
   let question = null, answered = false;
   let q = null;
   if (g.pacing === 'host' && g.phase === 'question') { q = g.questions[g.qIndex]; answered = g.answers.has(p.id); }
@@ -524,5 +551,5 @@ function playerView(g, deviceKey) {
     result: ['reveal', 'leaderboard', 'running', 'finished'].includes(g.phase) ? p.result : null, actions: p.actions, questionStartedAt: g.pacing === 'player' ? p.qStartedAt : g.startAt,
     leaderboard: g.mode === 'classic' && ['leaderboard', 'finished'].includes(g.phase) ? leaderboard(g) : [], podium: g.phase === 'finished' ? podium(g) : [] };
 }
-  window.KQEngine = { HOOKS, games, MODES, modeOf, createGame, getGame, startGame, hostNext, reveal, finish, joinGame, submitAnswer, openChest, claimTile, launchEnergy, hostView, playerView, ranking, expectedPlayers, setTimer, clearTimer, startQuestion, startRun, normQuestion, normQuestions, publicQuestion, quizFromInput, randomNick, badName, clean, cleanText, id, iso, fail, THEMES };
+  window.KQEngine = { scheduleAuto, clearAuto, applySettings, normAvatar, HOOKS, games, MODES, modeOf, createGame, getGame, startGame, hostNext, reveal, finish, joinGame, submitAnswer, openChest, claimTile, launchEnergy, hostView, playerView, ranking, expectedPlayers, setTimer, clearTimer, startQuestion, startRun, normQuestion, normQuestions, publicQuestion, quizFromInput, randomNick, badName, clean, cleanText, id, iso, fail, THEMES };
 })();
