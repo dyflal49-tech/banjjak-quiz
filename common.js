@@ -69,10 +69,10 @@
 
   // 효과음: WebAudio 합성 (외부 파일 없음)
   const sound = KQ.sound = { enabled: localStorage.getItem('kq-sound') !== 'off', ctx: null, musicTimer: null };
-  function ctx() { if (!sound.ctx) { const C = window.AudioContext || window.webkitAudioContext; if (!C) return null; sound.ctx = new C(); } if (sound.ctx.state === 'suspended') sound.ctx.resume().catch(() => {}); return sound.ctx; }
+  function ctx() { if (!sound.ctx) { const C = window.AudioContext || window.webkitAudioContext; if (!C) return null; try { sound.ctx = new C({ latencyHint: 'playback' }); } catch { sound.ctx = new C(); } } if (sound.ctx.state === 'suspended') sound.ctx.resume().catch(() => {}); return sound.ctx; }
   function tone(freq, start, dur, type = 'square', vol = 0.06) { const c = ctx(); if (!c) return; const o = c.createOscillator(), g = c.createGain(); o.type = type; o.frequency.value = freq; const t = c.currentTime + start; g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + dur); o.connect(g).connect(c.destination); o.start(t); o.stop(t + dur + 0.02); }
   const patterns = {
-    join: [[660, 0, .08], [880, .08, .1]], tick: [[1200, 0, .03, 'sine', .04]], countdown: [[523, 0, .15]], start: [[523, 0, .1], [659, .1, .1], [784, .2, .1], [1047, .3, .25]],
+    join: [[660, 0, .08, 'triangle', .06], [880, .08, .12, 'triangle', .06]], tick: [[1200, 0, .03, 'sine', .04]], countdown: [[523, 0, .15]], start: [[523, 0, .1], [659, .1, .1], [784, .2, .1], [1047, .3, .25]],
     correct: [[784, 0, .1, 'triangle', .09], [1047, .1, .2, 'triangle', .09]], wrong: [[220, 0, .18, 'sawtooth', .05], [165, .18, .25, 'sawtooth', .05]], reveal: [[392, 0, .1], [523, .1, .2]],
     fanfare: [[523, 0, .15], [659, .15, .15], [784, .3, .15], [1047, .45, .4], [784, .9, .12], [1047, 1.02, .5]], pop: [[900, 0, .05, 'sine', .07], [1300, .05, .06, 'sine', .05]]
   };

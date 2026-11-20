@@ -40,7 +40,7 @@
   const num = n => Number(n || 0).toLocaleString('ko-KR');
   const fmtClock = s => { s = Math.max(0, Math.floor(s || 0)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
   const vibrate = p => { try { if (navigator.vibrate) navigator.vibrate(p); } catch { /* 무시 */ } };
-  const imgOk = src => typeof src === 'string' && src.startsWith('/');
+  const imgOk = src => typeof src === 'string' && (src.startsWith('/') || src.startsWith('kqimg:') || src.startsWith('data:image/') || src.startsWith('https://'));
   const teamInfo = (teams, i) => {
     const t = (teams || []).find(x => x && x.index === i);
     return { name: t?.name || TEAM_DEFAULT[i]?.name || `${i + 1}팀`, color: t?.color || TEAM_DEFAULT[i]?.color || '#864cbf' };

@@ -32,7 +32,7 @@
     if (!sound.ctx) {
       const C = window.AudioContext || window.webkitAudioContext;
       if (!C) return null;
-      try { sound.ctx = new C(); } catch { return null; }
+      try { sound.ctx = new C({ latencyHint: 'playback' }); } catch { try { sound.ctx = new C(); } catch { return null; } }
     }
     const c = sound.ctx;
     if (c.state === 'suspended') c.resume().catch(() => {});
@@ -99,12 +99,12 @@
   function kick(c, out, t, v = 0.13, f0 = 150, f1 = 45, d = 0.28) {
     const o = c.createOscillator(), g = c.createGain();
     o.type = 'sine'; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + Math.min(0.12, d * 0.5));
-    g.gain.setValueAtTime(v, t); g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+    g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(v, t + 0.006); g.gain.exponentialRampToValueAtTime(0.0001, t + d);
     o.connect(g).connect(out); o.start(t); o.stop(t + d + 0.03);
   }
-  const hat = (c, out, t, v, open) => noiseHit(c, out, t, { type: 'highpass', f: 7000, v, d: open ? 0.16 : 0.035 });
+  const hat = (c, out, t, v, open) => noiseHit(c, out, t, { type: 'bandpass', f: 5200, q: 0.9, a: 0.006, v: v * 0.55, d: open ? 0.14 : 0.04 });
   function snare(c, out, t, v = 0.05, d = 0.13) {
-    noiseHit(c, out, t, { type: 'bandpass', f: 1900, q: 0.8, v, d });
+    noiseHit(c, out, t, { type: 'bandpass', f: 1700, q: 0.8, a: 0.004, v: v * 0.75, d });
     voice(c, out, t, 190, 0.02, { w: 'triangle', v: v * 0.7, a: 0.002, r: 0.06, sus: 0.4 });
   }
 
@@ -120,7 +120,7 @@
       bpm: 100, key: 62, scale: DOR, swing: 0.16, seventh: true,
       chords: [0, 3, 0, 3, 0, 3, 4, 3],
       mel: ['7.6.4...2.4.....', '5.4.3...1.3.....', '7.6.4...9.7.6.4.', '3-------........', '4.4.6.4.7...6.4.', '5.3.5.7.8---7...', '8.6.4.6.8-------', '7...5...3...1...'],
-      bass: '1..1..5.8..1.5..', k: 'x......x..x.....', s: '....x.......x...', h: 'x.x.x.x.x.x.x.x.',
+      bass: '1..1..5.8..1.5..', k: 'x......x..x.....', s: '................', h: '................',
       comp: '...x..x....x..x.', compI: { w: 'triangle', v: 0.018, r: 0.12, leg: 0.5, o: -1 },
       lead: { w: 'triangle', v: 0.065, r: 0.2, leg: 0.8, vib: 6 }, bassI: { w: 'triangle', v: 0.1, r: 0.08, leg: 0.7 }, dv: 0.8
     },
@@ -236,10 +236,12 @@
 
   function masterNode(c) {
     if (!master || master.context !== c) {
+      // 날카로운 고음(치직거림)을 줄이는 부드러운 필터 + 여유 있는 압축
       const comp = c.createDynamicsCompressor();
-      comp.threshold.value = -14; comp.ratio.value = 4;
+      comp.threshold.value = -18; comp.knee.value = 24; comp.ratio.value = 3; comp.attack.value = 0.01; comp.release.value = 0.25;
+      const soft = c.createBiquadFilter(); soft.type = 'lowpass'; soft.frequency.value = 6500; soft.Q.value = 0.5;
       master = c.createGain(); master.gain.value = gainFor(bgm.volume);
-      master.connect(comp); comp.connect(c.destination);
+      master.connect(soft); soft.connect(comp); comp.connect(c.destination);
     }
     return master;
   }
