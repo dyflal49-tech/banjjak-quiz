@@ -477,7 +477,7 @@
     } else {
       const pw = el('input', { type: 'password', class: 'input', autocomplete: 'current-password', required: true });
       const go = btn('로그인', null, 'primary big', { type: 'submit' });
-      add(card, el('h1', {}, '선생님 로그인'), el('p', { class: 'muted' }, me.firebase ? `우리반 보드와 같은 선생님 계정(${me.teacherEmail})의 비밀번호로 로그인하세요.` : '퀴즈를 만들고 게임을 진행하려면 로그인하세요.'),
+      add(card, el('h1', {}, '선생님 로그인'), el('p', { class: 'muted' }, me.firebase ? '우리반 보드에서 쓰는 선생님 비밀번호로 로그인하세요.' : '퀴즈를 만들고 게임을 진행하려면 로그인하세요.'),
         el('form', { class: 'stack', onSubmit: async e => {
           e.preventDefault();
           if (!pw.value) { pw.focus(); return; }

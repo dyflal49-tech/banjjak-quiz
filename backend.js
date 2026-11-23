@@ -72,7 +72,7 @@
     await ready; await waitUser();
     const t = isTeacher();
     let name = '선생님'; try { name = localStorage.getItem('kq-teacher-name') || auth.currentUser?.displayName || '선생님'; } catch {}
-    KQ.me = { teacher: t ? { name } : null, setupNeeded: false, isLocal: false, addresses: [SITE], port: '', firebase: true, teacherEmail: TEACHER_EMAIL, authError: authError ? friendly(authError).message : null };
+    KQ.me = { teacher: t ? { name } : null, setupNeeded: false, isLocal: false, addresses: [SITE], port: '', firebase: true, authError: authError ? friendly(authError).message : null };
     return KQ.me;
   };
 
@@ -362,7 +362,7 @@
   async function route(method, p, d) {
     let m;
     if (p === '/api/me') { await KQ.refreshMe(); return KQ.me; }
-    if (p === '/api/setup') fail(400, '이 사이트는 우리반 보드와 같은 선생님 계정(' + TEACHER_EMAIL + ')으로 로그인해요.');
+    if (p === '/api/setup') fail(400, '이 사이트는 우리반 보드와 같은 선생님 비밀번호로 로그인해요.');
     if (p === '/api/login' && method === 'POST') {
       const pw = String(d.password || ''); if (!pw) fail(400, '비밀번호를 입력하세요.');
       await persist; await auth.signInWithEmailAndPassword(TEACHER_EMAIL, pw); await KQ.refreshMe(); return { ok: true };
