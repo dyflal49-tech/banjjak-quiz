@@ -610,7 +610,7 @@
 @media (prefers-reduced-motion: reduce){.lv-howto-step{transition:none}}
 
 /* ===== v5: 호명, 미니게임 제목, 퀴즈 런 ===== */
-.lv-callout{position:fixed;left:50%;top:42%;transform:translate(-50%,-50%) scale(.4);z-index:9000;display:flex;flex-direction:column;align-items:center;gap:6px;pointer-events:none;animation:lv-callout 2.5s cubic-bezier(.2,1.4,.4,1) forwards}
+.lv-callout{position:fixed!important;z-index:9000!important;left:50%;top:42%;transform:translate(-50%,-50%) scale(.4);z-index:9000;display:flex;flex-direction:column;align-items:center;gap:6px;pointer-events:none;animation:lv-callout 2.5s cubic-bezier(.2,1.4,.4,1) forwards}
 .lv-callout-big{font-size:clamp(40px,7vw,96px);font-weight:900;color:#ffd43b;-webkit-text-stroke:3px #3b1d72;paint-order:stroke;text-shadow:0 8px 0 rgba(0,0,0,.35)}
 .lv-callout-name{font-size:clamp(30px,5vw,72px);font-weight:900;color:#fff;background:linear-gradient(90deg,#ff6b6b,#845ef7,#339af0);padding:6px 28px;border-radius:999px;box-shadow:0 10px 30px rgba(0,0,0,.4);max-width:80vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .lv-callout.place-1 .lv-callout-big{font-size:clamp(56px,9vw,128px)}
@@ -622,3 +622,11 @@
 .lv-player.lv-bg-runner .lv-pmain{display:none}
 .lv-player.lv-bg-runner .lv-mode-panel{max-width:none;padding:0;flex:1;display:flex}
 @media (prefers-reduced-motion: reduce){.lv-callout{animation:none;transform:translate(-50%,-50%)}}
+
+/* v6: 상 호명 동기화 */
+.lv-award.lv-award-wait{visibility:hidden;opacity:0}
+.lv-award.lv-award-show{visibility:visible;animation:lv-award-in .6s cubic-bezier(.2,1.5,.4,1) both}
+@keyframes lv-award-in{0%{opacity:0;transform:scale(.3) rotate(-8deg)}70%{opacity:1;transform:scale(1.08) rotate(2deg)}100%{opacity:1;transform:scale(1)}}
+.lv-callout .lv-av.lv-callout-av{border:6px solid #ffd43b;border-radius:50%;box-shadow:0 0 0 6px rgba(255,255,255,.35),0 14px 40px rgba(0,0,0,.45);background:#fff}
+.lv-callout.award{top:46%}
+@media (prefers-reduced-motion: reduce){.lv-award.lv-award-show{animation:none;opacity:1}}

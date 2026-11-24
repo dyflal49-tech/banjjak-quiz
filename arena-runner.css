@@ -112,3 +112,15 @@
 @keyframes ar-runner-pop{0%{opacity:0;transform:translateY(16px) scale(.8)}12%{opacity:1;transform:none}85%{opacity:1}100%{opacity:0;transform:translateY(-10px)}}
 @keyframes ar-runner-scroll{to{background-position:-80px 0}}
 @media (prefers-reduced-motion:reduce){.ar-runner-q.pop,.ar-runner-chip.bump,.ar-runner-judge.show,.ar-runner-row.new,.ar-runner-row.up,.ar-runner-hpopi,.ar-runner-hbg::after,.ar-runner-row.fever .ar-runner-streak,.ar-runner-stage.fever .ar-runner-sbar-fill{animation:none}.ar-runner-judge.show{opacity:1;transform:translate(-50%,-50%)}.ar-runner-row{transition:none}}
+
+/* v6: 문제 사진 */
+.ar-runner-q{display:flex;gap:10px;align-items:flex-start}
+.ar-runner-qmain{flex:1;min-width:0}
+.ar-runner-qimgbox{pointer-events:auto;position:relative;flex:0 0 auto;padding:0;border:2px solid #ffd8a8;border-radius:10px;background:#fff;cursor:zoom-in;overflow:hidden;line-height:0}
+.ar-runner-qimgbox[hidden],.ar-runner-qimg[hidden]{display:none}
+.ar-runner-qimg{display:block;max-height:min(24vh,170px);max-width:min(34vw,260px);width:auto;height:auto;object-fit:contain}
+.ar-runner-qzoom{position:absolute;right:3px;bottom:3px;background:rgba(43,18,87,.82);color:#fff;font:800 11px/1 system-ui,sans-serif;padding:3px 6px;border-radius:6px}
+.ar-runner-zoom{position:absolute;inset:0;z-index:20;background:rgba(10,5,30,.88);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:16px;cursor:zoom-out}
+.ar-runner-zoom img{max-width:96%;max-height:84%;object-fit:contain;border-radius:12px;background:#fff;box-shadow:0 10px 40px rgba(0,0,0,.5)}
+.ar-runner-zoom span{color:#fff;font-weight:800;font-size:14px;opacity:.85}
+@media (max-width:520px){.ar-runner-qimg{max-height:18vh;max-width:30vw}}

@@ -83,6 +83,7 @@
     if (!imgCache.has(iid)) imgCache.set(iid, col('kq_images').doc(iid).get().then(s => (s.exists ? s.data().data : '')).catch(() => ''));
     return imgCache.get(iid);
   }
+  KQ.loadImage = ref => (typeof ref === 'string' && ref.startsWith('kqimg:')) ? loadImage(ref) : Promise.resolve(typeof ref === 'string' ? ref : '');
   const BLANK = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
   const origEl = KQ.el;
   KQ.el = (tag, attrs, ...children) => {

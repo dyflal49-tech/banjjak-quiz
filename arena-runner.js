@@ -112,7 +112,10 @@
     st.ctx = st.canvas.getContext('2d');
     st.qText = H('div', { class: 'ar-runner-qtext' }, '');
     st.qChoices = H('div', { class: 'ar-runner-qchoices' });
-    st.qBox = H('div', { class: 'ar-runner-q', role: 'status', 'aria-live': 'polite' }, st.qText, st.qChoices);
+    st.qImg = H('img', { class: 'ar-runner-qimg', alt: '문제 사진 (누르면 크게 보여요)', hidden: true });
+    st.qImgBox = H('button', { type: 'button', class: 'ar-runner-qimgbox', 'aria-label': '문제 사진 크게 보기', hidden: true }, st.qImg, H('span', { class: 'ar-runner-qzoom' }, '크게'));
+    st.qImgBox.addEventListener('click', () => zoomImg(st));
+    st.qBox = H('div', { class: 'ar-runner-q', role: 'status', 'aria-live': 'polite' }, st.qImgBox, H('div', { class: 'ar-runner-qmain' }, st.qText, st.qChoices));
     st.hudScore = H('b', {}, '0'); st.hudSpeed = H('b', {}, '1'); st.hudStreak = H('b', {}, '0'); st.hudCoins = H('b', {}, '0'); st.hudDist = H('b', {}, '0');
     st.speedBar = H('span', { class: 'ar-runner-sbar-fill' });
     st.power = H('div', { class: 'ar-runner-power' });
@@ -198,16 +201,34 @@
     if (st.seenSeq === null && !r) st.seenSeq = -1;
   }
 
+  function zoomImg(st) {
+    if (!st.qImg || !st.qImg.src || st.qImgBox.hidden) return;
+    const big = H('div', { class: 'ar-runner-zoom', role: 'dialog', 'aria-label': '문제 사진' }, H('img', { src: st.qImg.src, alt: '문제 사진' }), H('span', {}, '잠깐 멈췄어요. 아무 곳이나 누르면 닫히고 다시 달려요'));
+    st.zoomed = true;
+    const close = () => { big.remove(); st.zoomed = false; };
+    big.addEventListener('pointerdown', e => { e.preventDefault(); close(); });
+    document.addEventListener('keydown', function k(e) { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', k); } });
+    st.stage.append(big);
+  }
+  function setQImage(st, ref) {
+    const token = (st.imgToken = (st.imgToken || 0) + 1);
+    st.qImgBox.hidden = true; st.qImg.hidden = true; st.qImg.removeAttribute('src');
+    if (!ref || typeof ref !== 'string') return;
+    const done = src => { if (st.dead || token !== st.imgToken || !src) return; st.qImg.src = src; st.qImg.hidden = false; st.qImgBox.hidden = false; };
+    if (ref.startsWith('kqimg:')) { if (window.KQ && typeof KQ.loadImage === 'function') KQ.loadImage(ref).then(done).catch(() => {}); }
+    else if (/^(data:image\/|https:\/\/|\/)/.test(ref)) done(ref);
+  }
   function showQuestion(st, q) {
     const choices = Array.isArray(q.choices) ? q.choices : [];
     const n = clamp(choices.length || N(q.choiceCount) || 2, 2, 4);
     st.lanes = n; st.lane = clamp(st.lane, 0, n - 1);
     st.qText.textContent = q.text || '큰 화면의 문제를 보세요';
+    setQImage(st, q.image);
     st.qChoices.replaceChildren(...choices.map((c, i) => H('span', { class: 'ar-runner-qc', style: `--c:${SHAPE_COLORS[i]}` }, shapeIcon(i, 18), H('span', {}, (c && c.text) || SHAPE_NAMES[i]))));
     st.qBox.classList.remove('pop'); void st.qBox.offsetWidth; st.qBox.classList.add('pop');
     // 문 배치
     const sp = speedNow(st, performance.now());
-    const read = clamp(6 + String(q.text || '').length * 0.09 + choices.reduce((a, c) => a + String((c && c.text) || '').length, 0) * 0.05, 7, 14);
+    const read = clamp(6 + String(q.text || '').length * 0.09 + choices.reduce((a, c) => a + String((c && c.text) || '').length, 0) * 0.05, 7, 14) + (q.image ? 5 : 0);
     const gz = st.pz + Math.max(60, sp * read);
     st.objs = st.objs.filter(o => o.z < gz - 14 || o.z > gz + 10);
     st.gate = { z: gz, qid: q.id, n, choices: choices.map((c, i) => (c && c.text) || SHAPE_NAMES[i]), passed: false };
@@ -248,6 +269,7 @@
 
   // ---------- 진행 ----------
   function step(st, t) {
+    if (st.zoomed) { st.last = t; return; }
     const dt = Math.min(0.05, Math.max(0, (t - st.last) / 1000)); st.last = t; st.runT += dt;
     const sp = speedNow(st, t);
     const dz = sp * dt; st.pz += dz; st.seg.dist += dz; st.totals.dist += dz;

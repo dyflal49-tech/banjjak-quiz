@@ -912,7 +912,7 @@
     let tenseOn = false, settingsUI = null, podiumStarted = false, preRanks = null, preRanksQi = -1;
     const fxTimers = [];
     const later = (fn, ms) => { const t = setTimeout(() => { if (ended) return; try { fn(); } catch (e) { console.warn('[반짝퀴즈] 효과 오류:', e); } }, Math.max(0, ms)); fxTimers.push(t); return t; };
-    const clearLater = () => { while (fxTimers.length) clearTimeout(fxTimers.pop()); };
+    const clearLater = () => { while (fxTimers.length) clearTimeout(fxTimers.pop()); try { if (window.speechSynthesis) window.speechSynthesis.cancel(); } catch { /* 무시 */ } };
     const fxDone = new Set();
     const stage = el('div', { class: 'lv-stage', 'aria-label': '게임 무대' });
     let stageUsed = false;
@@ -1178,10 +1178,63 @@
       (sc.ups || []).forEach(({ row, idx }) => later(() => fxCall('burst', row, { count: 24, colors: ['#51cf66', '#ffd43b', '#ffffff'] }), (0.2 + idx * 0.28 + 0.7) * 1000));
     }
     // 시상식: 드럼롤 → 3위 → 2위 → 1위 (등장마다 폭죽 + 쿵), 1위에 불꽃놀이·색종이 비·팡파르
-    const POD_DELAY = { 3: 1.9, 2: 3.0, 1: 4.3 };
+    const POD_DELAY = { 3: 1.9, 2: 4.6, 1: 7.6 };
     const teamsSortedLen = v => (v.teamsEnabled && Array.isArray(v.teams) ? v.teams.length : 0);
-    function speak(text) { try { if (!KQ.sound || !KQ.sound.enabled || !window.speechSynthesis) return; const u = new SpeechSynthesisUtterance(text); u.lang = 'ko-KR'; u.rate = 1.02; u.pitch = 1.1; window.speechSynthesis.speak(u); } catch { /* 무시 */ } }
-    function callout(host, big, name, cls) { if (!host) return; const c = el('div', { class: 'lv-callout ' + (cls || ''), 'aria-hidden': 'true' }, el('span', { class: 'lv-callout-big' }, big), el('span', { class: 'lv-callout-name' }, name || '')); host.append(c); setTimeout(() => c.remove(), 2600); }
+    // 호명 음성: 기기에 있는 한국어 목소리 중 가장 자연스러운 것을 고름 (Edge 의 Natural 음성 > Google > 그 밖)
+    let koVoice = null;
+    function pickVoice() {
+      try {
+        const vs = (window.speechSynthesis && window.speechSynthesis.getVoices()) || [];
+        const ko = vs.filter(v => /^ko/i.test(v.lang || ''));
+        const score = v => (/natural|neural|online/i.test(v.name) ? 100 : 0) + (/sunhi|seoyeon|yuna|sora|jimin|hyunsu|injoon/i.test(v.name) ? 30 : 0) + (/google/i.test(v.name) ? 40 : 0) + (v.localService ? 0 : 10);
+        koVoice = ko.sort((a, b) => score(b) - score(a))[0] || null;
+      } catch { koVoice = null; }
+    }
+    try { if (window.speechSynthesis) { pickVoice(); window.speechSynthesis.addEventListener('voiceschanged', pickVoice); } } catch { /* 무시 */ }
+    const josa = (w, a, b) => { const s = String(w || '').trim(); const c = s.charCodeAt(s.length - 1); if (c >= 0xac00 && c <= 0xd7a3) return s + ((c - 0xac00) % 28 ? a : b); return s + b; };
+    // 호명 음성 우선순위: 기기의 자연스러운 한국어 음성(Edge Natural, Google) > Google 번역 음성(무료, 인터넷 필요) > 기기 기본 음성
+    const naturalLocal = () => !!(koVoice && /natural|neural|online|google/i.test(koVoice.name));
+    const ttsUrl = text => 'https://translate.google.com/translate_tts?ie=UTF-8&tl=ko&client=tw-ob&ttsspeed=0.9&q=' + encodeURIComponent(text);
+    const voiceCache = new Map();
+    function preloadVoice(text) {
+      try { if (!KQ.sound || !KQ.sound.enabled || naturalLocal() || voiceCache.has(text)) return; const a = new Audio(); a.preload = 'auto'; a.src = ttsUrl(text); voiceCache.set(text, a); } catch { /* 무시 */ }
+    }
+    // 말이 실제로 시작되는 순간 onStart 를 부름 (소리를 못 내면 바로 부르고 2.4초 간격 유지). 끝나면 onEnd.
+    function speakSync(text, onStart, onEnd) {
+      let started = false, done = false, mode = '';
+      const start = () => { if (started) return; started = true; try { onStart && onStart(); } catch (e) { console.warn(e); } };
+      const end = () => { if (done) return; done = true; start(); try { onEnd && onEnd(); } catch (e) { console.warn(e); } };
+      const silent = () => { start(); later(end, 2400); };
+      if (!KQ.sound || !KQ.sound.enabled) return silent();
+      const local = () => {
+        if (mode === 'local' || done) return; mode = 'local';
+        if (!window.speechSynthesis || typeof SpeechSynthesisUtterance === 'undefined') return silent();
+        try {
+          if (!koVoice) pickVoice();
+          const u = new SpeechSynthesisUtterance(text); u.lang = 'ko-KR'; if (koVoice) u.voice = koVoice;
+          u.rate = naturalLocal() ? 1.0 : 0.95; u.pitch = 1.0; u.volume = 1;
+          u.onstart = start;
+          u.onend = () => { if (!started) silent(); else later(end, 700); };
+          u.onerror = () => { if (!started) silent(); else later(end, 300); };
+          window.speechSynthesis.speak(u);
+          later(() => { if (!started) silent(); }, 1200); later(end, 8000);
+        } catch { silent(); }
+      };
+      if (naturalLocal()) return local();
+      try {
+        mode = 'audio';
+        const a = voiceCache.get(text) || new Audio(ttsUrl(text)); voiceCache.delete(text);
+        a.volume = 1;
+        a.onplaying = start;
+        a.onended = () => later(end, 600);
+        a.onerror = () => { if (!started) local(); };
+        const p = a.play(); if (p && p.catch) p.catch(() => { if (!started) local(); });
+        later(() => { if (!started) { try { a.pause(); } catch { /* 무시 */ } local(); } }, 1800);
+        later(end, 9000);
+      } catch { local(); }
+    }
+    function speak(text) { speakSync(text, null, null); }
+    function callout(host, big, name, cls, av) { if (!host) return; const c = el('div', { class: 'lv-callout ' + (cls || ''), 'aria-hidden': 'true' }, av ? avatarNode(av, 150, name, 'lv-callout-av') : null, el('span', { class: 'lv-callout-big' }, big), el('span', { class: 'lv-callout-name' }, name || '')); (document.body || host).append(c); setTimeout(() => c.remove(), 2900); }
     function finishFx() {
       const sc = screen || {};
       const base = sc.delayBase || 0;
@@ -1201,7 +1254,7 @@
           fxCall('burst', who, { count: place === 1 ? 110 : 60 });
           snd('boom');
           const nm = (sc.podNames || {})[place] || '';
-          callout(sc.node, `${place}위`, nm, 'place-' + place); speak(`${place}위, ${nm}!`);
+          callout(sc.node, `${place}위`, nm, 'place-' + place); speak(`${place}위는, ${nm}!`);
           if (place === 1) {
             if (sc.node) sc.node.classList.add('lv-spot-on');
             fxCall('fireworks', 6000);
@@ -1212,7 +1265,16 @@
         }, (base + POD_DELAY[place] + 0.6) * 1000);
       });
       later(() => { podiumStarted = true; if (bgmOn()) bgmCall('play', 'podium'); }, pods[1] ? (base + POD_DELAY[1] + 2.6) * 1000 : 1500);
-      (sc.awards || []).forEach((a, i) => later(() => { const n = (sc.awardNodes || [])[i]; if (n) { fxCall('burst', n, { count: 50 }); fxCall('stars', n); } snd('levelup'); callout(sc.node, '특별상 ' + (a.title || ''), a.nickname || '', 'award'); speak(`특별상, ${a.title}, ${a.nickname}!`); }, (base + POD_DELAY[1] + 2.4 + i * 1.6) * 1000 + 300));
+      const awardList = (sc.awards || []).slice();
+      const nextAward = i => {
+        if (i >= awardList.length) return;
+        const a = awardList[i]; const n = (sc.awardNodes || [])[i];
+        speakSync(`${josa(a.title, '은', '는')}, ${a.nickname || ''}!`, () => {
+          if (n) { n.classList.remove('lv-award-wait'); n.classList.add('lv-award-show'); fxCall('burst', n, { count: 50 }); fxCall('stars', n); }
+          snd('levelup'); callout(sc.node, a.title || '', a.nickname || '', 'award', a.avatar || null);
+        }, () => nextAward(i + 1));
+      };
+      if (awardList.length) later(() => nextAward(0), pods[1] ? (base + POD_DELAY[1] + 3.2) * 1000 : 1200);
     }
 
     function buildHost(v) {
@@ -1562,7 +1624,7 @@
         parts.push(el('div', { class: 'lv-team-result' }, res));
       }
       const awards = v.modeState && Array.isArray(v.modeState.awards) ? v.modeState.awards.slice(0, 4) : [];
-      if (awards.length) parts.push(el('div', { class: 'lv-awards' }, awards.map((a, i) => el('div', { class: 'lv-award pop-in', 'data-award': String(i), style: { animationDelay: ((teamsSortedLen(v) ? 0.8 : 0) + POD_DELAY[1] + 2.4 + i * 1.6) + 's' } }, el('span', { class: 'lv-award-title' }, a.title || ''), avatarNode(a.avatar, 56, a.nickname, 'lv-award-av'), el('span', { class: 'lv-award-name' }, a.nickname || ''), el('span', { class: 'lv-award-desc' }, (a.desc || '') + (a.value ? ` · ${num(a.value)}${a.unit || ''}` : ''))))));
+      if (awards.length) parts.push(el('div', { class: 'lv-awards' }, awards.map((a, i) => el('div', { class: 'lv-award lv-award-wait', 'data-award': String(i) }, el('span', { class: 'lv-award-title' }, a.title || ''), avatarNode(a.avatar, 56, a.nickname, 'lv-award-av'), el('span', { class: 'lv-award-name' }, a.nickname || ''), el('span', { class: 'lv-award-desc' }, (a.desc || '') + (a.value ? ` · ${num(a.value)}${a.unit || ''}` : ''))))));
       const delayBase = teamsSorted.length ? 0.8 : 0;
       const podNames = {}; [0, 1, 2].forEach(i => { if (pod[i]) podNames[i + 1] = pod[i].nickname || ''; });
       const pods = {};
@@ -1589,6 +1651,7 @@
         KQ.btn('같은 퀴즈로 다시', () => KQ.go(quizId ? '/teacher/host/' + encodeURIComponent(quizId) : '/teacher'), 'lv-white-btn'),
         KQ.btn('게임 닫기', closeGame, 'danger')));
       const node = el('div', { class: 'lv-fin' }, parts);
+      try { [3, 2, 1].forEach(pl => { if (podNames[pl]) preloadVoice(`${pl}위는, ${podNames[pl]}!`); }); awards.forEach(a => preloadVoice(`${josa(a.title, '은', '는')}, ${a.nickname || ''}!`)); } catch { /* 무시 */ }
       return { node, pods, banner, bannerWin, teamWin, delayBase, podNames, awards, awardNodes: [...node.querySelectorAll('.lv-award')] };
     }
 
