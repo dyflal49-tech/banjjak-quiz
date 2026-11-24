@@ -387,9 +387,9 @@
       st.lastMoveAt = t;
       if (v.x) st.face = v.x > 0 ? 1 : -1;
     }
-    // 위치 전송: 움직이는 동안 1초에 한 번, 멈추면 한 번
+    // 위치 전송: 움직이는 동안 2초에 한 번(무료 사용량 절약), 멈추면 바로 한 번
     const diff = Math.hypot(me.x - st.sentX, me.y - st.sentY);
-    if (diff > 3 && ((moving && t - st.sentAt >= 1000) || (!moving && t - st.lastMoveAt > 160 && t - st.sentAt >= 250))) {
+    if (diff > 3 && ((moving && t - st.sentAt >= 2000) || (!moving && t - st.lastMoveAt > 160 && t - st.sentAt >= 250))) {
       st.sentX = me.x; st.sentY = me.y; st.sentAt = t;
       fire(st, 'move', { x: Math.round(me.x), y: Math.round(me.y) });
     }
