@@ -195,7 +195,7 @@
     const left = Math.max(0, (g.endsAt || 0) - Date.now());
     if (g.phase === 'countdown') E.setTimer(g, left, () => (g.pacing === 'host' ? E.startQuestion(g) : E.startRun(g)));
     else if (g.phase === 'question') E.setTimer(g, left, () => E.reveal(g));
-    else if (g.phase === 'running') E.setTimer(g, left, () => E.finish(g));
+    else if (g.phase === 'running') { E.setTimer(g, left, () => E.finish(g, g.mode === 'marble' && g.ms && g.ms.stage === 'race')); E.resumeMode(g); }
     else if (['reveal', 'leaderboard'].includes(g.phase) && s.autoAt) E.scheduleAuto(g, s.autoAt - Date.now());
     return g;
   }
@@ -211,7 +211,8 @@
         if (!p) fail(403, g.kicked.has(u) ? '진행자가 이 기기를 게임에서 내보냈어요.' : '먼저 게임에 참가하세요.');
         if (d.type === 'answer') { const r = E.submitAnswer(g, p, String(d.questionId || ''), d.answer); reply = { ok: true, body: { ok: true, ...r } }; }
         else if (d.type === 'action') {
-          if (d.kind === 'claim') E.claimTile(g, p, d.target);
+          if (['boost', 'symbol', 'flags', 'stack'].includes(d.kind)) E.arenaAction(g, p, d.kind, d.target);
+          else if (d.kind === 'claim') E.claimTile(g, p, d.target);
           else if (d.kind === 'launch') E.launchEnergy(g, p, d.target);
           else if (d.kind === 'chest') { if (g.mode !== 'treasure' || g.phase !== 'running') fail(400, '지금은 상자를 열 수 없어요.'); E.openChest(g, p, d.target); }
           else fail(400, '알 수 없는 행동이에요.');

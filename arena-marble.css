@@ -1,0 +1,107 @@
+/* 반짝퀴즈 마블 레이스 (arena-marble.js) */
+.ar-marble-host{width:100%;height:100%;min-height:240px;color:#fff;font-weight:700;overflow:hidden}
+.ar-marble-dot{--c:#0aa3a3;display:inline-block;width:16px;height:16px;border-radius:50%;flex:0 0 auto;
+  background:radial-gradient(circle at 34% 30%,#fff 0,rgba(255,255,255,.55) 16%,var(--c) 46%,color-mix(in srgb,var(--c) 70%,#000) 100%);
+  box-shadow:inset 0 -2px 3px rgba(0,0,0,.25),0 1px 2px rgba(0,0,0,.3)}
+.ar-marble-dot.gold{background:radial-gradient(circle at 34% 30%,#fffbe0 0,#ffe066 30%,#f5b800 62%,#a86f00 100%);box-shadow:0 0 0 2px var(--c),0 0 8px 2px rgba(255,212,59,.8);position:relative;overflow:hidden}
+.ar-marble-dot.gold::after{content:"";position:absolute;inset:-40%;background:linear-gradient(115deg,transparent 40%,rgba(255,255,255,.9) 50%,transparent 60%);animation:ar-marble-shine 2.6s ease-in-out infinite}
+.ar-marble-dot.empty{padding:0;text-align:initial;background:rgba(255,255,255,.14);box-shadow:inset 0 1px 3px rgba(0,0,0,.35)}
+.ar-marble-dot.big{width:22px;height:22px}
+.ar-marble-dot.pop{animation:ar-marble-pop .55s cubic-bezier(.3,1.6,.5,1) both}
+@keyframes ar-marble-pop{0%{transform:translateY(-60px) scale(.3);opacity:0}60%{transform:translateY(3px) scale(1.15);opacity:1}100%{transform:none}}
+@keyframes ar-marble-shine{0%,55%{transform:translateX(-60%)}85%,100%{transform:translateX(60%)}}
+
+/* ---- 진행자: 모으기 ---- */
+.md-root.ar-marble-host.ar-marble-collect{display:flex;flex-direction:column;gap:10px;padding:12px 14px;
+  background:radial-gradient(ellipse at 50% 0,rgba(255,255,255,.14),transparent 60%),linear-gradient(180deg,#0aa3a3,#076d78)}
+.ar-marble-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.ar-marble-title{font-size:clamp(20px,2.6vw,30px);font-weight:900;text-shadow:0 2px 0 rgba(0,0,0,.25)}
+.ar-marble-total{display:flex;align-items:center;gap:8px;background:rgba(0,0,0,.25);border-radius:999px;padding:6px 16px;font-size:clamp(14px,1.5vw,18px)}
+.ar-marble-total strong{font-size:1.6em;font-weight:900;min-width:1.2em;text-align:center}
+.ar-marble-total-num.bump{animation:ar-marble-bump .45s ease}
+@keyframes ar-marble-bump{40%{transform:scale(1.4);color:#ffe066}}
+.ar-marble-gold-num{color:#ffe066}
+.ar-marble-people{opacity:.8;margin-left:6px;font-size:.9em}
+.ar-marble-jars{flex:1;min-height:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(var(--ar-jar,104px),1fr));gap:10px 8px;align-content:start;overflow:hidden}
+.ar-marble-jar{display:flex;flex-direction:column;align-items:center;gap:4px;min-width:0}
+.ar-marble-jar.got .ar-marble-glass{animation:ar-marble-wiggle .5s ease}
+@keyframes ar-marble-wiggle{30%{transform:rotate(-4deg)}60%{transform:rotate(3deg)}}
+.ar-marble-glass{position:relative;width:calc(var(--ar-jar,104px) * .62);height:calc(var(--ar-jar,104px) * .78);border:3px solid rgba(255,255,255,.85);border-top:none;border-radius:6px 6px 18px 18px;
+  background:linear-gradient(90deg,rgba(255,255,255,.28),rgba(255,255,255,.08) 30%,rgba(255,255,255,.05) 70%,rgba(255,255,255,.22));padding:4px;display:flex;align-items:flex-end}
+.ar-marble-glass::before{content:"";position:absolute;left:-6px;right:-6px;top:-4px;height:6px;border-radius:4px;background:rgba(255,255,255,.9)}
+.ar-marble-jar.full .ar-marble-glass{border-color:#ffe066;box-shadow:0 0 12px rgba(255,224,102,.6)}
+.ar-marble-tube{width:100%;display:flex;flex-wrap:wrap-reverse;justify-content:center;gap:1px}
+.ar-marble-tube .ar-marble-dot{width:calc((var(--ar-jar,104px) * .62 - 14px) / 3);height:calc((var(--ar-jar,104px) * .62 - 14px) / 3)}
+.ar-marble-cnt{position:absolute;top:2px;right:-12px;min-width:24px;height:24px;border-radius:12px;background:#fff;color:#076d78;font-weight:900;font-size:14px;display:grid;place-items:center;padding:0 5px;box-shadow:0 2px 4px rgba(0,0,0,.3)}
+.ar-marble-who{display:flex;align-items:center;gap:4px;max-width:100%;font-size:13px}
+.ar-marble-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ar-marble-av{display:inline-grid;place-items:center;border-radius:50%;overflow:hidden;flex:0 0 auto;color:#fff;font-weight:900;background:#fff}
+.ar-marble-av>svg{width:100%;height:100%;display:block}
+.ar-marble-more{margin:0;text-align:center;opacity:.85;font-size:14px}
+.ar-marble-empty{margin:auto;text-align:center;display:flex;flex-direction:column;gap:8px;max-width:560px;padding:18px 22px;background:rgba(0,0,0,.2);border-radius:16px}
+.ar-marble-empty strong{font-size:clamp(22px,3vw,34px);font-weight:900}
+.ar-marble-empty span{font-size:clamp(14px,1.6vw,18px);opacity:.9}
+
+/* ---- 진행자: 레이스 ---- */
+.md-root.ar-marble-host.ar-marble-race{display:grid;grid-template-columns:minmax(0,1fr) clamp(150px,22%,230px);gap:10px;padding:8px;background:#064e57}
+.ar-marble-trackbox{position:relative;min-width:0;min-height:0;display:flex;align-items:center;justify-content:center}
+.ar-marble-svg{width:100%;height:100%;display:block}
+.ar-marble-svgtxt{fill:#fff;font-weight:900;font-size:22px;paint-order:stroke;stroke:rgba(0,0,0,.4);stroke-width:4px}
+.ar-marble-svgtxt.small{font-size:16px}
+.ar-marble-tag{fill:#222;font-size:14px;font-weight:900}
+.ar-marble-tagbg{fill:#fff;stroke:rgba(0,0,0,.25)}
+.ar-marble-tagbg.t0{fill:#ffe066}
+.ar-marble-tagg{pointer-events:none}
+.ar-marble-count{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none;background:rgba(0,0,0,.25);border-radius:12px}
+.ar-marble-count .num{font-size:clamp(70px,14vw,160px);font-weight:900;color:#fff;text-shadow:0 6px 0 rgba(0,0,0,.3);animation:ar-marble-cnum .9s ease-out both}
+.ar-marble-count .num.go{color:#ffe066}
+@keyframes ar-marble-cnum{0%{transform:scale(2.2);opacity:0}25%{transform:scale(1);opacity:1}100%{transform:scale(.9);opacity:.85}}
+.ar-marble-banner{position:absolute;top:2%;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:10px;background:#fff;border:4px solid #ffd43b;color:#076d78;border-radius:999px;padding:6px 18px 6px 10px;box-shadow:0 6px 18px rgba(0,0,0,.35);animation:ar-marble-drop .6s cubic-bezier(.3,1.5,.5,1) both;pointer-events:none;white-space:nowrap}
+.ar-marble-banner .crown svg{width:34px;height:24px;display:block;visibility:visible}
+.ar-marble-banner .txt{display:flex;flex-direction:column;line-height:1.1}
+.ar-marble-banner small{font-size:13px;font-weight:800}
+.ar-marble-banner strong{font-size:clamp(18px,2.2vw,26px);font-weight:900}
+@keyframes ar-marble-drop{0%{transform:translate(-50%,-80px);opacity:0}100%{transform:translate(-50%,0);opacity:1}}
+.ar-marble-side{min-width:0;min-height:0;display:flex;flex-direction:column;gap:6px;background:rgba(0,0,0,.25);border-radius:12px;padding:10px;overflow:hidden}
+.ar-marble-side h3{margin:0;font-size:15px;font-weight:900;opacity:.9}
+.ar-marble-top{list-style:none;margin:0 0 4px;padding:0;display:flex;flex-direction:column;gap:6px}
+.ar-marble-toprow{display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.12);border-radius:10px;padding:5px 6px;min-width:0}
+.ar-marble-toprow.r0{background:linear-gradient(90deg,rgba(255,212,59,.5),rgba(255,212,59,.15))}
+.ar-marble-toprow.swap{animation:ar-marble-swap .5s ease}
+@keyframes ar-marble-swap{0%{transform:translateX(18px);opacity:.3}100%{transform:none}}
+.ar-marble-toprank{width:22px;height:22px;border-radius:50%;background:#fff;color:#076d78;display:grid;place-items:center;font-weight:900;font-size:13px;flex:0 0 auto}
+.ar-marble-toprow.r0 .ar-marble-toprank{background:#ffd43b;color:#5c3d00}
+.ar-marble-topav{display:flex;flex:0 0 auto}
+.ar-marble-topinfo{display:flex;flex-direction:column;min-width:0;line-height:1.15}
+.ar-marble-topname{font-size:15px;font-weight:900;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ar-marble-topsub{font-size:12px;opacity:.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ar-marble-raceinfo{font-size:13px;opacity:.8;margin-bottom:4px}
+.ar-marble-talk{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:5px;overflow:hidden;min-height:0}
+.ar-marble-talk li{font-size:13px;line-height:1.3;background:rgba(255,255,255,.1);border-radius:8px;padding:5px 7px;opacity:.75}
+.ar-marble-talk li.new{opacity:1;background:rgba(255,255,255,.22);animation:ar-marble-swap .4s ease}
+@media (max-width:700px){.md-root.ar-marble-race{grid-template-columns:1fr;grid-template-rows:minmax(0,1fr) auto}.ar-marble-talk{display:none}}
+.lv-stage-slot.small .ar-marble-collect{padding:6px 10px}
+.lv-stage-slot.small .ar-marble-jars,.lv-stage-slot.small .ar-marble-more{display:none}
+
+/* ---- 학생 ---- */
+.ar-marble-player{color:#fff;font-weight:700}
+.ar-marble-pbox{display:flex;align-items:center;gap:12px;background:linear-gradient(90deg,#0aa3a3,#087f8c);border-radius:14px;padding:10px 12px;box-shadow:0 3px 0 rgba(0,0,0,.2);max-height:116px}
+.ar-marble-tray{display:grid;grid-template-columns:repeat(6,18px);gap:4px;padding:6px;background:rgba(0,0,0,.22);border-radius:10px;flex:0 0 auto}
+.ar-marble-tray .ar-marble-dot{width:18px;height:18px}
+.ar-marble-ptext{display:flex;flex-direction:column;gap:2px;min-width:0}
+.ar-marble-pline{font-size:18px;font-weight:900}
+.ar-marble-pline strong{font-size:1.35em;color:#ffe066}
+.ar-marble-pgold{font-size:13px;color:#ffe066}
+.ar-marble-pgold:empty{display:none}
+.ar-marble-phint{font-size:13px;opacity:.9}
+@media (max-width:400px){.ar-marble-tray{grid-template-columns:repeat(6,14px);gap:3px}.ar-marble-tray .ar-marble-dot{width:14px;height:14px}.ar-marble-pline{font-size:16px}}
+.ar-marble-pcard{display:flex;flex-direction:column;align-items:center;text-align:center;gap:10px;background:linear-gradient(180deg,#0aa3a3,#076d78);border-radius:18px;padding:22px 18px;box-shadow:0 4px 0 rgba(0,0,0,.2)}
+.ar-marble-pcard h2{margin:0;font-size:clamp(24px,6vw,36px);font-weight:900}
+.ar-marble-psub{margin:0;font-size:16px;opacity:.9}
+.ar-marble-pplace{font-size:clamp(28px,8vw,48px);font-weight:900;text-shadow:0 3px 0 rgba(0,0,0,.25)}
+.ar-marble-pplace.top{color:#ffe066}
+.ar-marble-pbar{position:relative;width:min(100%,520px);height:18px;border-radius:9px;background:rgba(0,0,0,.28);margin:6px 0}
+.ar-marble-pbar .ar-marble-dot.me{position:absolute;top:50%;left:0;width:28px;height:28px;transform:translate(-50%,-50%);transition:left .25s linear}
+.ar-marble-pflag{position:absolute;right:-2px;top:-6px;bottom:-6px;width:10px;border-radius:2px;background:repeating-linear-gradient(0deg,#fff 0 5px,#222 5px 10px)}
+.ar-marble-pnote{margin:0;font-size:15px;opacity:.9}
+@media (prefers-reduced-motion:reduce){.ar-marble-dot.pop,.ar-marble-dot.gold::after,.ar-marble-jar.got .ar-marble-glass,.ar-marble-count .num,.ar-marble-banner,.ar-marble-toprow.swap,.ar-marble-talk li.new,.ar-marble-total-num.bump{animation:none}}

@@ -24,9 +24,9 @@
   const TEAM_DEFAULT = [{ name: '빨강 팀', color: '#e21b3c' }, { name: '파랑 팀', color: '#1368ce' }, { name: '노랑 팀', color: '#d89e00' }, { name: '초록 팀', color: '#26890c' }];
   const FALLBACK_MODES = [
     { id: 'classic', color: '#46178f', name: '클래식', pacing: 'host', teams: false, original: false, description: '모두 같은 문제를 풀고 빠르고 정확하게 답해 점수를 모아요.' },
-    { id: 'submarine', color: '#0a5fa3', name: '잠수함 특공대', pacing: 'host', teams: false, original: false, description: '반 전체가 힘을 모아 깊은 바다까지 잠수해요.' },
-    { id: 'kingdom', color: '#b8341b', name: '컬러 킹덤', pacing: 'host', teams: true, original: false, description: '팀별로 정답을 맞혀 지도의 땅을 차지해요.' },
-    { id: 'space', color: '#1d1d5c', name: '우주 정복', pacing: 'host', teams: true, original: false, description: '팀 에너지를 행성에 보내 우주를 정복해요.' },
+    { id: 'submarine', color: '#0a5fa3', name: '잠수함 특공대', pacing: 'player', teams: false, original: false, description: '반 전체가 힘을 모아 깊은 바다까지 잠수해요.' },
+    { id: 'kingdom', color: '#b8341b', name: '컬러 킹덤', pacing: 'player', teams: true, original: false, description: '팀별로 정답을 맞혀 지도의 땅을 차지해요.' },
+    { id: 'space', color: '#1d1d5c', name: '우주 정복', pacing: 'player', teams: true, original: false, description: '팀별로 블록을 떨어뜨려 가장 높은 타워를 쌓아요.' },
     { id: 'garden', color: '#2f8f2f', name: '우리반 꽃밭', pacing: 'host', teams: false, original: true, description: '정답마다 꽃이 피어 함께 꽃밭을 채워요.' },
     { id: 'boss', color: '#7a1fa2', name: '보스 레이드', pacing: 'host', teams: false, original: true, description: '모두의 정답으로 거대한 보스를 물리쳐요.' },
     { id: 'robot', color: '#0aa3a3', name: '로봇 경주', pacing: 'player', teams: false, original: false, description: '각자 문제를 풀며 로봇을 결승선까지 달리게 해요.' },
@@ -34,7 +34,10 @@
     { id: 'tower', color: '#1368ce', name: '하늘 탑 쌓기', pacing: 'player', teams: false, original: true, description: '정답마다 블록을 쌓아 가장 높은 탑을 만들어요.' },
     { id: 'treasure', color: '#b37f00', name: '행운의 보물상자', pacing: 'player', teams: false, original: true, description: '정답을 맞히면 보물상자를 골라 행운을 시험해요.' }
   ];
-  const COOP = new Set(['submarine', 'garden', 'boss']);
+  const COOP = new Set(['robot', 'submarine', 'garden', 'boss']);
+  const ARENA = new Set(['robot', 'submarine', 'marble', 'kingdom', 'space']);
+  const ARENA_ACT = { boost: ['부스트 준비 완료!', '아래 버튼을 길게 눌러 부스트를 쏘아요.'], symbol: ['큰 화면을 보세요!', '큰 화면에 나온 기호와 같은 기호를 골라요.'], flags: ['깃발을 꽂을 차례!', '우리 팀 땅과 맞닿은 칸을 골라요.'], blocks: ['블록을 떨어뜨릴 차례!', '움직이는 블록을 알맞은 때 눌러요.'] };
+  const howToOf = id => { try { const m = window.KQModes && window.KQModes.get(id); return m && Array.isArray(m.howTo) ? m.howTo : []; } catch { return []; } };
   const TEAM_MODES = new Set(['kingdom', 'space']);
   const fmtPin = pin => String(pin || '').replace(/^(\d{3})(\d{3})$/, '$1 $2');
   const num = n => Number(n || 0).toLocaleString('ko-KR');
@@ -261,7 +264,7 @@
 
     function sigOf(v) {
       const q = v.question;
-      return ['v', v.phase, q ? q.id : '-', (v.answered || isSubmitted(v)) ? 1 : 0, q?.ownQuestion ? 1 : 0, isLocked(v) ? 1 : 0, v.actions?.kind || '', v.result ? v.result.seq : '', v.me?.team ?? ''].join('|');
+      return ['v', v.phase, q ? q.id : '-', (v.answered || isSubmitted(v)) ? 1 : 0, q?.ownQuestion ? 1 : 0, isLocked(v) ? 1 : 0, v.actions?.kind || '', v.result ? v.result.seq : '', v.me?.team ?? '', v.mode === 'marble' ? (v.modeState?.stage || '') : ''].join('|');
     }
 
     function rankUpOf(res, v) {
@@ -384,6 +387,8 @@
         case 'countdown': return countdownScreen(v);
         case 'question':
         case 'running': {
+          if (v.phase === 'running' && v.actions && ARENA_ACT[v.actions.kind]) { const [t1, t2] = ARENA_ACT[v.actions.kind]; return { node: el('div', { class: 'lv-act-head' }, el('h1', {}, v.actions.bonus ? '보너스 파워업! ' + t1 : t1), el('p', {}, t2)), bg: 'lv-bg-purple', panelBig: true }; }
+          if (v.phase === 'running' && v.mode === 'marble' && v.modeState && v.modeState.stage === 'race') return { node: el('div', { class: 'lv-act-head' }, el('h1', {}, '마지막 레이스!'), el('p', {}, '큰 화면을 보세요. 내 마블을 응원해요!')), bg: 'lv-bg-purple', panelBig: true };
           if (v.phase === 'running' && isLocked(v)) return lockScreen(v);
           if (v.phase === 'running' && v.actions && v.actions.kind === 'chest') return { node: msgNode('보물상자를 골라요!', '아래 상자 중 하나를 눌러 보세요.'), bg: 'lv-bg-purple', panelBig: true };
           if (!q) return { node: waitNode(v.phase === 'running' ? '다음 문제를 불러오는 중…' : '다음 문제를 기다려요', '곧 시작해요.'), bg: 'lv-bg-purple' };
@@ -527,7 +532,8 @@
         if (n !== lastN) { lastN = n; const s = el('span', { class: 'lv-count-num' }, String(n)); big.replaceChildren(s); }
       };
       tick(v);
-      return { node: el('div', { class: 'lv-center-msg' }, el('p', { class: 'lv-lead' }, v.quizTitle || ''), big, el('h1', {}, '준비!')), bg: 'lv-bg-purple', tick, update: tick };
+      const how = ARENA.has(v.mode) ? howToOf(v.mode) : [];
+      return { node: el('div', { class: 'lv-center-msg' }, el('p', { class: 'lv-lead' }, v.quizTitle || ''), big, el('h1', {}, '준비!'), how.length ? el('ol', { class: 'lv-howto-mini' }, how.map(t => el('li', {}, t))) : null), bg: 'lv-bg-purple', tick, update: tick };
     }
 
     // --- 수리 중 (로봇) ---
@@ -538,7 +544,7 @@
         n.textContent = String(Math.max(1, Math.ceil((vv.lockedUntil - KQ.now()) / 1000)));
       };
       tick(v);
-      return { node: el('div', { class: 'lv-center-msg' }, el('div', { class: 'lv-gear', 'aria-hidden': 'true' }), el('h1', {}, '로봇 수리 중… ', n, '초'), el('p', {}, '오답이라 잠깐 멈췄어요. 곧 다시 달려요!')), bg: 'lv-bg-bad', tick };
+      return { node: el('div', { class: 'lv-center-msg' }, el('div', { class: 'lv-gear', 'aria-hidden': 'true' }), el('h1', {}, (ARENA.has(v.mode) ? '잠깐 숨 고르기… ' : '로봇 수리 중… '), n, '초'), el('p', {}, ARENA.has(v.mode) ? '오답이라 잠깐 쉬어요. 곧 다음 문제가 나와요!' : '오답이라 잠깐 멈췄어요. 곧 다시 달려요!')), bg: 'lv-bg-bad', tick };
     }
 
     // --- 문제 ---
@@ -692,6 +698,13 @@
     }
 
     // --- 종료 ---
+    function finExtra(v) {
+      const s = v.modeState || {}, me = v.me || {}; const out = [];
+      if (s.kind === 'chase' && (s.status === 'success' || s.status === 'failed')) out.push(el('p', { class: 'lv-fin-extra ' + (s.status === 'success' ? 'good' : 'bad') }, s.status === 'success' ? '우리 반 탈출 성공!' : (s.theme === 'sub' ? '바다 괴물에게 잡혔어요' : '로봇에게 잡혔어요')));
+      if (Array.isArray(s.teams) && s.teams.length && me.team !== null && me.team !== undefined) { const sorted = s.teams.slice().sort((a, b) => (b.score || 0) - (a.score || 0)); const r = sorted.findIndex(t => t.index === me.team) + 1; const t = s.teams.find(x => x.index === me.team); if (r > 0 && t) out.push(el('p', { class: 'lv-fin-extra' + (r === 1 ? ' good' : '') }, `${t.name || ''} ${r}위` + (s.kind === 'kingdom' ? ` · 땅 ${num(t.score)}칸` : s.kind === 'tower' ? ` · 타워 ${num(t.score)}층` : ''))); }
+      for (const a of (Array.isArray(s.awards) ? s.awards : [])) if (a && a.nickname && a.nickname === me.nickname) out.push(el('p', { class: 'lv-fin-extra award' }, `나의 상: ${a.title}`));
+      return out.length ? el('div', { class: 'lv-fin-extras' }, out) : null;
+    }
     function finishedScreen(v) {
       const me = v.me;
       const rank = Number(me.rank) || 0;
@@ -713,6 +726,7 @@
         el('p', { class: 'lv-praise' }, praise),
         el('p', { class: 'lv-praise-sub' }, praiseSub),
         el('p', { class: 'lv-final-score' }, scoreNum, '점' + (me.answered ? ` · ${me.answered}문제 중 ${me.correct || 0}개 정답` : '')),
+        finExtra(v),
         top3,
         top5List(pod, me),
         KQ.btn('다시 홈으로', () => KQ.go('/'), 'big lv-white-btn'));
@@ -846,7 +860,6 @@
         el('div', { class: 'lv-opts-grid' },
           info.teams ? select('teamCount', '팀 수', [2, 3, 4], v => `${v}팀`) : null,
           info.pacing === 'player' ? select('durationMin', '게임 시간', [2, 3, 5, 7, 10], v => `${v}분`) : null,
-          info.id === 'robot' ? select('goal', '결승선 문제 수', [10, 15, 20, 30], v => `${v}문제`) : null,
           info.pacing !== 'player' ? select('autoAdvance', '결과 자동 넘김', AUTO_CHOICES, v => v ? `${v}초 뒤 자동으로 넘김` : '끔 (선생님이 직접 넘김)') : null),
         info.pacing !== 'player' ? el('p', { class: 'lv-help' }, '정답 공개와 점수판이 정한 시간 뒤에 저절로 다음으로 넘어가요. 게임 중에도 상단의 설정에서 바꿀 수 있어요.') : null,
         info.pacing === 'player' && pollCount ? el('p', { class: 'notice' }, `각자 속도 게임에서는 설문 문제 ${pollCount}개를 빼고 진행해요.`) : null,
@@ -858,7 +871,6 @@
         const options = { randomizeQuestions: state.randomizeQuestions, randomizeAnswers: state.randomizeAnswers, showOnDevice: state.showOnDevice, friendlyNicknames: state.friendlyNicknames, skipOwnQuestions: state.skipOwnQuestions };
         if (info.teams) options.teamCount = state.teamCount;
         if (info.pacing === 'player') options.duration = state.durationMin * 60;
-        if (info.id === 'robot') options.goal = state.goal;
         if (info.pacing !== 'player') options.autoAdvance = state.autoAdvance;
         try {
           const r = await KQ.api('/api/games', 'POST', { quizId, mode: info.id, options });
@@ -1288,14 +1300,19 @@
         const n = Math.max(1, KQ.secondsLeft(vv.endsAt) || 1);
         if (n !== lastN) { lastN = n; big.replaceChildren(el('span', { class: 'lv-hcount-num' }, String(n))); KQ.sound.play('countdown'); }
       };
-      tick(v);
+      const how = ARENA.has(v.mode) ? howToOf(v.mode) : [];
+      const steps = how.map((t, i) => el('li', { class: 'lv-howto-step' }, el('span', { class: 'lv-howto-num' }, String(i + 1)), el('span', {}, t)));
+      const tick0 = tick;
+      const tick2 = vv => { tick0(vv); if (!steps.length) return; const total = Math.max(1, (vv.endsAt || 0) - (vv.startedCountdownAt || 0)); const left = Math.max(0, (vv.endsAt || 0) - KQ.now()); const idx = Math.min(steps.length - 1, Math.floor((9000 - left) / (8000 / steps.length))); steps.forEach((s, i) => { s.classList.toggle('on', i === idx); s.classList.toggle('done', i < idx); }); };
+      tick2(v);
       const host = v.pacing !== 'player' && v.questionCount;
       const node = el('div', { class: 'lv-hcountdown' },
         el('h1', { class: 'lv-hcount-title' }, v.quizTitle || ''),
         host ? el('p', { class: 'lv-hcount-sub' }, `${(v.questionIndex ?? 0) + 1}번 문제 / 총 ${v.questionCount}문제`) : el('p', { class: 'lv-hcount-sub' }, v.modeName || ''),
+        steps.length ? el('div', { class: 'lv-howto' }, el('h2', {}, '플레이하는 방법'), el('ol', {}, steps)) : null,
         big,
-        attachStage(el('div', { class: 'lv-stage-slot small' })));
-      return { node, tick, update: tick };
+        steps.length ? null : attachStage(el('div', { class: 'lv-stage-slot small' })));
+      return { node, tick: tick2, update: tick2 };
     }
 
     // --- 문제 ---
@@ -1517,7 +1534,8 @@
         const st = v.modeState.status;
         const win = st === 'success' || st === 'victory', lose = st === 'failed' || st === 'defeat';
         if (win || lose) {
-          banner = el('div', { class: 'lv-coop-banner ' + (win ? 'good' : 'bad') + ' pop-in', role: 'status' }, win ? '반 전체 미션 성공!' : '아쉽게 미션 실패', el('small', {}, win ? '모두 힘을 모아 해냈어요' : '다음엔 꼭 성공해요'));
+          const chase = v.modeState.kind === 'chase', chaser = v.modeState.theme === 'sub' ? '바다 괴물' : '로봇';
+          banner = el('div', { class: 'lv-coop-banner ' + (win ? 'good' : 'bad') + ' pop-in', role: 'status' }, chase ? (win ? '반 전체 탈출 성공!' : `${chaser}에게 잡혔어요`) : (win ? '반 전체 미션 성공!' : '아쉽게 미션 실패'), el('small', {}, chase ? (win ? `부스트 ${num(v.modeState.boosts)}번으로 ${chaser}을 따돌렸어요` : '다음엔 부스트를 더 모아 꼭 탈출해요') : (win ? '모두 힘을 모아 해냈어요' : '다음엔 꼭 성공해요')));
           bannerWin = win;
           parts.push(banner);
         }
@@ -1530,6 +1548,8 @@
         teamWin = res[0];
         parts.push(el('div', { class: 'lv-team-result' }, res));
       }
+      const awards = v.modeState && Array.isArray(v.modeState.awards) ? v.modeState.awards.slice(0, 4) : [];
+      if (awards.length) parts.push(el('div', { class: 'lv-awards' }, awards.map((a, i) => el('div', { class: 'lv-award pop-in', style: { animationDelay: (1.6 + i * 0.35) + 's' } }, el('span', { class: 'lv-award-title' }, a.title || ''), avatarNode(a.avatar, 56, a.nickname, 'lv-award-av'), el('span', { class: 'lv-award-name' }, a.nickname || ''), el('span', { class: 'lv-award-desc' }, (a.desc || '') + (a.value ? ` · ${num(a.value)}${a.unit || ''}` : ''))))));
       const delayBase = teamsSorted.length ? 0.8 : 0;
       const pods = {};
       const block = (p, place) => {

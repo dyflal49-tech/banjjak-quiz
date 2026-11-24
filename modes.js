@@ -1006,14 +1006,24 @@
     boss: c => iconBox(c, nest(bossSVG(), 5, 6, 54, 54))
   };
 
+
+  // ---------- 카훗형 모드 렌더러 연결 (arena-*.js 가 KQ.arena[id] = {host, player} 를 등록) ----------
+  function arenaRender(id, role, root, view, send) {
+    const a = KQ.arena && KQ.arena[id];
+    const fn = a && a[role];
+    if (typeof fn === 'function') return fn(root, view, send);
+    prep(root, 'arena-missing-' + id, ['md-arena-missing'], () => root.append(H('div', { class: 'md-fallback', text: '그래픽을 불러오는 중…' })));
+  }
+  KQ.modeKit = { H, S, svgBox, nest, num, clamp, str, arr, txt, css, cls, show, attr, replay, nowMs, reducedMotion, prep, teardown, dispose, later, act, freshItems, teamsOf, teamColor, teamName, shade, colorFor, safeColor, hash, ms, meOf, robotSVG, subSVG, flameSVG, wrenchSVG, crownSVG, TEAM_COLORS, TEAM_NAMES, PALETTE, MEDAL };
+
   // ---------- 모드 목록 ----------
   const META = [
     { id: 'classic', name: '클래식', tag: '카훗 클래식 스타일', pacing: 'host', teams: false, original: false, color: '#46178f', description: '모두가 같은 문제를 동시에 풀고 빠르고 정확할수록 높은 점수를 받아요.', howTo: ['큰 화면의 문제를 보고 내 기기에서 답을 골라요.', '빨리 맞힐수록 점수가 높아요.', '문제마다 순위가 바뀌니 끝까지 집중해요.'], renderHost: classicHost, renderPlayer: classicPlayer },
-    { id: 'robot', name: '로봇 경주', tag: '카훗 로봇 경주 스타일', pacing: 'player', teams: false, original: false, color: '#1368ce', description: '각자 자기 속도로 문제를 풀며 내 로봇을 결승선까지 달리게 해요.', howTo: ['정답을 맞히면 로봇이 한 칸 앞으로 가요.', '세 번 연속 맞히면 터보로 한 칸 더 가요.', '틀리면 3초 동안 로봇을 수리해요.'], renderHost: robotHost, renderPlayer: robotPlayer },
-    { id: 'marble', name: '마블 레이스', tag: '카훗 마블 레이스 스타일', pacing: 'player', teams: false, original: false, color: '#0aa3a3', description: '정답을 맞힐 때마다 내 구슬이 구불구불한 코스를 굴러 내려가요.', howTo: ['빨리 맞힐수록 구슬이 멀리 굴러가요.', '연속으로 맞히면 보너스 가속이 붙어요.', '틀리면 구슬이 살짝 뒤로 튕겨요.'], renderHost: marbleHost, renderPlayer: marblePlayer },
-    { id: 'submarine', name: '잠수함 특공대', tag: '카훗 잠수함 특공대 스타일', pacing: 'host', teams: false, original: false, color: '#0b4f8a', description: '우리 반 정답률로 잠수함을 바다 밑 보물까지 내려보내는 협동 모드예요.', howTo: ['모두가 같은 문제를 함께 풀어요.', '정답률이 높을수록 잠수함이 깊이 내려가요.', '오답이 많으면 산소가 줄어드니 함께 힘내요.'], renderHost: subHost, renderPlayer: subPlayer },
-    { id: 'kingdom', name: '컬러 킹덤', tag: '카훗 컬러 킹덤 스타일', pacing: 'host', teams: true, original: false, color: '#e8590c', description: '팀별로 정답을 맞혀 지도 위 땅을 우리 팀 색으로 칠해요.', howTo: ['정답을 맞히면 땅을 차지할 기회가 생겨요.', '정답 공개 때 내 기기에서 원하는 칸을 눌러요.', '다른 팀 땅도 빼앗을 수 있어요.'], renderHost: kingdomHost, renderPlayer: kingdomPlayer },
-    { id: 'space', name: '우주 정복', tag: '카훗 우주 정복 스타일', pacing: 'host', teams: true, original: false, color: '#25076b', description: '팀별로 에너지를 모아 행성을 차지하는 우주 전략 모드예요.', howTo: ['정답을 맞히면 에너지를 얻어요.', '정답 공개 때 행성을 골라 에너지를 보내요.', '에너지가 가장 많은 팀이 행성을 차지해요.'], renderHost: spaceHost, renderPlayer: spacePlayer },
+    { id: 'robot', name: '로봇 경주', tag: '카훗 로봇 경주 스타일', pacing: 'player', teams: false, original: false, color: '#1368ce', description: '반 전체가 한 팀! 쫓아오는 로봇에게서 도망치며 함께 탈출하는 협동 모드예요.', howTo: ['정답을 맞히면 에너지가 한 칸씩 차요.', '에너지 3칸이 차면 부스트 버튼을 길게 눌러요.', '모두의 부스트로 로봇과 거리를 벌려요.', '시간이 끝날 때까지 잡히지 않으면 탈출 성공!'], renderHost: (r, v, s) => arenaRender('robot', 'host', r, v, s), renderPlayer: (r, v, s) => arenaRender('robot', 'player', r, v, s) },
+    { id: 'marble', name: '마블 레이스', tag: '카훗 마블 레이스 스타일', pacing: 'player', teams: false, original: false, color: '#0aa3a3', description: '정답마다 마블을 모으고, 마지막에 모든 마블이 함께 달리는 대형 레이스로 순위를 정해요.', howTo: ['정답을 맞힐 때마다 새 마블을 얻어요.', '빨리 맞히면 조금 더 빠른 황금 마블이 돼요.', '마블이 많을수록 우승 기회가 커져요.', '마지막 레이스는 큰 화면에서 다 함께 봐요.'], renderHost: (r, v, s) => arenaRender('marble', 'host', r, v, s), renderPlayer: (r, v, s) => arenaRender('marble', 'player', r, v, s) },
+    { id: 'submarine', name: '잠수함 특공대', tag: '카훗 잠수함 특공대 스타일', pacing: 'player', teams: false, original: false, color: '#0b4f8a', description: '반 전체가 잠수함 한 척! 바다 괴물을 피해 함께 탈출하는 협동 모드예요.', howTo: ['정답을 맞히면 에너지가 한 칸씩 차요.', '에너지 3칸이 차면 큰 화면에 나온 기호를 골라요.', '기호가 맞으면 부스트! 괴물과 거리를 벌려요.', '시간이 끝날 때까지 잡히지 않으면 탈출 성공!'], renderHost: (r, v, s) => arenaRender('submarine', 'host', r, v, s), renderPlayer: (r, v, s) => arenaRender('submarine', 'player', r, v, s) },
+    { id: 'kingdom', name: '컬러 킹덤', tag: '카훗 컬러 킹덤 스타일', pacing: 'player', teams: true, original: false, color: '#e8590c', description: '팀별로 정답 깃발을 꽂아 육각형 땅을 우리 팀 색으로 넓혀 가는 영토 전략 모드예요.', howTo: ['정답을 맞히면 깃발 3개를 얻어요.', '우리 팀 땅과 맞닿은 칸에 깃발을 꽂아요.', '땅을 빙 둘러싸면 안쪽이 모두 우리 땅!', '땅이 가장 넓은 팀이 이겨요.'], renderHost: (r, v, s) => arenaRender('kingdom', 'host', r, v, s), renderPlayer: (r, v, s) => arenaRender('kingdom', 'player', r, v, s) },
+    { id: 'space', name: '우주 정복', tag: '카훗 우주 정복 스타일', pacing: 'player', teams: true, original: false, color: '#25076b', description: '팀별로 블록을 떨어뜨려 우주까지 닿는 가장 높은 타워를 쌓는 팀 대항 모드예요.', howTo: ['정답을 맞히면 건축용 블록 5개를 얻어요.', '움직이는 블록을 알맞은 때 눌러 떨어뜨려요.', '가운데에 딱 맞추면 완벽한 착지!', '10층마다 보너스 블록, 가장 높은 팀이 우승!'], renderHost: (r, v, s) => arenaRender('space', 'host', r, v, s), renderPlayer: (r, v, s) => arenaRender('space', 'player', r, v, s) },
     { id: 'tower', name: '하늘 탑 쌓기', tag: '반짝 오리지널', pacing: 'player', teams: false, original: true, color: '#339af0', description: '정답 블록을 하나씩 쌓아 하늘 높이 나만의 탑을 올려요.', howTo: ['정답을 맞히면 블록이 한 층 올라가요.', '빨리 맞히면 황금 블록으로 두 층이 올라가요.', '틀리면 맨 위 블록이 하나 무너져요.'], renderHost: towerHost, renderPlayer: towerPlayer },
     { id: 'treasure', name: '행운의 보물상자', tag: '반짝 오리지널', pacing: 'player', teams: false, original: true, color: '#b8860b', description: '정답을 맞힐 때마다 보물상자를 골라 금화를 모으는 행운 모드예요.', howTo: ['정답을 맞히면 상자 세 개 중 하나를 골라요.', '금화, 두 배, 나눔, 꽝 중 무엇이 나올지 몰라요.', '금화를 가장 많이 모은 사람이 이겨요.'], renderHost: treasureHost, renderPlayer: treasurePlayer },
     { id: 'garden', name: '우리반 꽃밭', tag: '반짝 오리지널', pacing: 'host', teams: false, original: true, color: '#26890c', description: '우리 반이 함께 정답을 맞혀 들판을 꽃으로 가득 채우는 협동 모드예요.', howTo: ['정답 하나마다 꽃 한 송이가 피어요.', '두 배 문제는 꽃이 두 송이 피어요.', '끝날 때 목표만큼 피우면 성공이에요.'], renderHost: gardenHost, renderPlayer: gardenPlayer },

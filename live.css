@@ -584,3 +584,27 @@
   .lv-pod-crown,.lv-lb-crown,.lv-rankup,.lv-lb-upbadge,.lv-cheer,.lv-streak-hot{opacity:1}
   .lv-p-lobby-av .lv-av,.lv-fin-me .lv-fin-av,.lv-medal-disc,.lv-up-ico{animation:none!important}
 }
+
+/* ===== v4 카훗형 모드: 행동 제목, 플레이 방법, 시상 ===== */
+.lv-act-head{text-align:center;color:#fff;padding:14px 12px 6px}
+.lv-act-head h1{font-size:clamp(22px,5.2vw,34px);margin:0 0 4px;text-shadow:0 3px 0 rgba(0,0,0,.25)}
+.lv-act-head p{margin:0;font-size:clamp(14px,3.6vw,18px);opacity:.92}
+.lv-howto{background:rgba(255,255,255,.12);border:2px solid rgba(255,255,255,.25);border-radius:18px;padding:12px 18px;margin:6px auto 4px;max-width:760px;width:calc(100% - 32px);color:#fff}
+.lv-howto h2{margin:0 0 8px;font-size:20px;text-align:center;letter-spacing:.02em}
+.lv-howto ol{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
+.lv-howto-step{display:flex;gap:8px;align-items:flex-start;background:rgba(0,0,0,.18);border-radius:12px;padding:10px 12px;font-size:16px;line-height:1.35;opacity:.55;transform:scale(.97);transition:opacity .35s,transform .35s,background .35s}
+.lv-howto-step.done{opacity:.8}
+.lv-howto-step.on{opacity:1;transform:scale(1.04);background:rgba(255,255,255,.24);box-shadow:0 6px 18px rgba(0,0,0,.25)}
+.lv-howto-num{flex:0 0 auto;width:28px;height:28px;border-radius:50%;background:#ffd43b;color:#3b1d72;font-weight:900;display:grid;place-items:center}
+.lv-howto-mini{list-style:decimal;text-align:left;margin:14px auto 0;max-width:420px;padding:12px 16px 12px 36px;background:rgba(255,255,255,.12);border-radius:14px;font-size:15px;line-height:1.5}
+.lv-awards{display:flex;flex-wrap:wrap;justify-content:center;gap:14px;margin:10px auto 4px;max-width:980px}
+.lv-award{background:linear-gradient(180deg,#fff,#f1ecff);color:#2b1257;border-radius:18px;padding:12px 16px 14px;min-width:170px;max-width:220px;display:flex;flex-direction:column;align-items:center;gap:6px;box-shadow:0 8px 22px rgba(0,0,0,.28);border:3px solid #ffd43b;animation-fill-mode:both}
+.lv-award-title{background:#ffd43b;color:#3b1d72;font-weight:900;border-radius:999px;padding:3px 14px;font-size:17px}
+.lv-award-name{font-weight:800;font-size:18px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lv-award-desc{font-size:13px;opacity:.75;text-align:center}
+.lv-fin-extras{display:flex;flex-direction:column;gap:6px;align-items:center;margin:4px 0}
+.lv-fin-extra{margin:0;background:rgba(255,255,255,.16);border-radius:999px;padding:6px 16px;font-weight:800;font-size:17px}
+.lv-fin-extra.good{background:#26890c}
+.lv-fin-extra.bad{background:#c92a2a}
+.lv-fin-extra.award{background:#ffd43b;color:#3b1d72}
+@media (prefers-reduced-motion: reduce){.lv-howto-step{transition:none}}
