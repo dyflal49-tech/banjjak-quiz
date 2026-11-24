@@ -87,7 +87,7 @@ const MODES = [
   { id: 'submarine', name: '잠수함 특공대', pacing: 'player', teams: false, original: false },
   { id: 'kingdom', name: '컬러 킹덤', pacing: 'player', teams: true, original: false },
   { id: 'space', name: '우주 정복', pacing: 'player', teams: true, original: false },
-  { id: 'tower', name: '하늘 탑 쌓기', pacing: 'player', teams: false, original: true },
+  { id: 'runner', name: '퀴즈 런', pacing: 'player', teams: false, original: true },
   { id: 'treasure', name: '행운의 보물상자', pacing: 'player', teams: false, original: true },
   { id: 'garden', name: '우리반 꽃밭', pacing: 'host', teams: false, original: true },
   { id: 'boss', name: '보스 레이드', pacing: 'host', teams: false, original: true }
@@ -145,6 +145,7 @@ function createGame(quiz, modeId, rawOpts) {
   const mode = modeOf(modeId); if (!mode) fail(400, '게임 모드를 선택하세요.');
   const options = readOptions(rawOpts, mode);
   let list = quiz.questions.filter(q => mode.pacing === 'host' || q.type !== 'poll');
+  if (mode.id === 'runner') { list = list.filter(q => q.type === 'quiz' || q.type === 'truefalse'); if (!list.length) fail(400, '퀴즈 런은 객관식이나 참/거짓 문제가 1개 이상 필요해요.'); }
   if (!list.length) fail(400, mode.pacing === 'player' ? '이 게임은 설문을 제외한 문제가 1개 이상 필요해요.' : '문제가 1개 이상 필요해요.');
   if (options.randomizeQuestions) list = shuffle(list);
   const g = {
@@ -165,9 +166,11 @@ function initModeState(g) {
     g.teams.forEach((t, i) => { const [c, r] = KINGDOM.castles[i]; const idx = r * KINGDOM.cols + c; ms.castles[i] = idx; ms.tiles[idx] = i; });
   }
   if (g.mode === 'space') Object.assign(ms, { kind: 'tower', bonusEvery: TOWER.bonusEvery, towers: g.teams.map(() => ({ height: 0, blocks: [] })), drops: [], awards: [] });
-  if (g.mode === 'garden') Object.assign(ms, { goal: 0, flowers: [], bloomed: 0, status: 'growing' });
-  if (g.mode === 'boss') Object.assign(ms, { bossName: BOSSES[crypto.randomInt(BOSSES.length)], bossHp: 0, bossMaxHp: 0, shield: 100, status: 'fighting', hits: [] });
-  if (g.mode === 'treasure') ms.events = [];
+  if (g.mode === 'garden') Object.assign(ms, { kind: 'garden', awards: [], goal: 0, flowers: [], bloomed: 0, status: 'growing' });
+  if (g.mode === 'boss') Object.assign(ms, { kind: 'boss', awards: [], phase: 'normal', finisher: null, lastAttack: null, bossName: BOSSES[crypto.randomInt(BOSSES.length)], bossHp: 0, bossMaxHp: 0, shield: 100, status: 'fighting', hits: [] });
+  if (g.mode === 'treasure') Object.assign(ms, { kind: 'treasure', events: [] });
+  if (g.mode === 'runner') Object.assign(ms, { kind: 'runner', awards: [] });
+  if (g.mode === 'robot') Object.assign(ms, { stage: 1, stages: ROBOT.stages, part: 'chase', stageBoosts: 0, stageGoal: 3, mini: null, lastMini: null, cleared: false, pausedGap: 0 });
   g.ms = ms;
 }
 function getGame(pin) { const g = games.get(String(pin)); if (!g) fail(404, '게임을 찾을 수 없어요. PIN을 확인하세요.'); return g; }
@@ -232,7 +235,7 @@ function startGame(g) {
   const n = g.players.size, qn = g.questions.length;
   if (g.mode === 'garden') g.ms.goal = Math.max(5, Math.round(n * qn * 0.6));
   if (g.mode === 'boss') { g.ms.bossMaxHp = Math.max(3000, Math.round(n * qn * 750 * 0.55)); g.ms.bossHp = g.ms.bossMaxHp; }
-  const cd = g.pacing === 'player' && ARENA_MODES.has(g.mode) ? 9000 : 3000;
+  const cd = g.mode === 'runner' ? 12000 : g.pacing === 'player' && (ARENA_MODES.has(g.mode) || g.mode === 'treasure') ? 9000 : 3000;
   g.phase = 'countdown'; g.endsAt = now() + cd;
   if (g.pacing === 'host') { g.qIndex = 0; setTimer(g, cd, () => startQuestion(g)); }
   else setTimer(g, cd, () => startRun(g));
@@ -285,18 +288,32 @@ function reveal(g) {
     if (g.mode === 'garden' && g.ms.status !== 'failed') {
       for (const a of answeredList) if (a.correct) {
         const p = g.players.get(a.playerId); const count = q.points === 'double' ? 2 : 1;
-        for (let k = 0; k < count; k++) { g.ms.bloomed++; g.ms.flowers.push({ x: 4 + crypto.randomInt(92), y: 30 + crypto.randomInt(64), kind: crypto.randomInt(6), by: p?.nickname || '' }); }
+        const rare = !!(p && p.streak >= 3);
+        for (let k = 0; k < count + (rare ? 1 : 0); k++) { g.ms.bloomed++; g.ms.flowers.push({ x: 4 + crypto.randomInt(92), y: 30 + crypto.randomInt(64), kind: crypto.randomInt(6), by: p?.nickname || '', rare: rare && k === count, q: g.qIndex, at: now() }); }
+        if (p) stat(p, 'flowers', count + (rare ? 1 : 0)); if (p && rare) stat(p, 'rare');
+        if (rare) addFeed(g, p.nickname, '연속 정답! 무지개 꽃이 피었어요');
       }
       if (g.ms.flowers.length > 200) g.ms.flowers = g.ms.flowers.slice(-200);
-      if (g.ms.bloomed >= g.ms.goal) g.ms.status = 'success';
+      g.ms.lastBloom = { q: g.qIndex, count: answeredList.filter(a => a.correct).length, accuracy: Math.round(accuracy * 100), at: now() };
+      if (g.ms.bloomed >= g.ms.goal && g.ms.status !== 'success') { g.ms.status = 'success'; addFeed(g, '우리반', '목표 달성! 꽃밭이 가득 찼어요'); }
     }
     if (g.mode === 'boss' && g.ms.status === 'fighting') {
       for (const a of answeredList.filter(a => a.correct).sort((x, y) => y.points - x.points)) {
-        const p = g.players.get(a.playerId); const dmg = Math.max(100, a.points);
-        g.ms.bossHp = Math.max(0, g.ms.bossHp - dmg); g.ms.hits.unshift({ nickname: p?.nickname || '', damage: dmg });
+        const p = g.players.get(a.playerId); const crit = !!(p && p.streak >= 3); const dmg = Math.round(Math.max(100, a.points) * (crit ? 1.5 : 1));
+        if (g.ms.bossHp <= 0) break;
+        if (p) { stat(p, 'dmg', dmg); if (crit) stat(p, 'crit'); }
+        g.ms.bossHp = Math.max(0, g.ms.bossHp - dmg); g.ms.hits.unshift({ nickname: p?.nickname || '', avatar: p?.avatar || null, damage: dmg, crit, q: g.qIndex, at: now() });
+        if (g.ms.bossHp <= 0) { g.ms.finisher = { nickname: p?.nickname || '', avatar: p?.avatar || null }; addFeed(g, p?.nickname || '', '마지막 일격! 보스를 쓰러뜨렸어요'); }
+        else if (crit) addFeed(g, p?.nickname || '', `치명타 ${dmg}!`);
       }
-      g.ms.hits.length = Math.min(g.ms.hits.length, 8);
-      g.ms.shield = Math.max(0, g.ms.shield - Math.round((1 - accuracy) * 220 / questionCount));
+      g.ms.hits.length = Math.min(g.ms.hits.length, 12);
+      const shieldLoss = Math.round((1 - accuracy) * 220 / questionCount);
+      g.ms.shield = Math.max(0, g.ms.shield - shieldLoss);
+      g.ms.lastAttack = shieldLoss > 0 && g.ms.bossHp > 0 ? { q: g.qIndex, dmg: shieldLoss, at: now() } : null;
+      const ratio = g.ms.bossMaxHp ? g.ms.bossHp / g.ms.bossMaxHp : 1;
+      const ph = ratio <= 0.25 ? 'rage' : ratio <= 0.5 ? 'angry' : 'normal';
+      if (ph !== g.ms.phase && g.ms.bossHp > 0) { if (ph === 'angry') addFeed(g, g.ms.bossName, '화가 났어요! 더 힘내요', false); if (ph === 'rage') addFeed(g, g.ms.bossName, '마지막 발악! 거의 다 왔어요', false); }
+      g.ms.phase = ph; g.ms.round = g.qIndex;
       if (g.ms.bossHp <= 0) g.ms.status = 'victory'; else if (g.ms.shield <= 0) g.ms.status = 'defeat';
     }
   }
@@ -334,6 +351,7 @@ function startRun(g) {
   if (g.ms.kind === 'chase') {
     const n = Math.max(1, g.players.size);
     Object.assign(g.ms, { status: 'running', startAt: g.startAt, symStart: g.startAt, catchAt: g.startAt + CHASE.startGap, boostMs: Math.round(Math.min(30000, Math.max(1500, 40000 / n))) });
+    if (g.ms.theme === 'robot') g.ms.stageGoal = stageGoalOf(n, 1);
     scheduleCatch(g);
   }
   setTimer(g, g.options.duration * 1000, () => finish(g)); touch(g);
@@ -350,21 +368,153 @@ function symbolAt(ms, t) { const k = Math.floor((t - ms.symStart) / ms.symPeriod
 function scheduleCatch(g) {
   if (g.catchTimer) clearTimeout(g.catchTimer);
   g.catchTimer = null;
-  if (g.ms.kind !== 'chase' || g.ms.status !== 'running' || g.phase !== 'running') return;
+  if (g.ms.kind !== 'chase' || g.ms.status !== 'running' || g.phase !== 'running' || g.ms.part === 'mini') return;
   g.catchTimer = setTimeout(() => {
     g.catchTimer = null;
-    if (g.phase !== 'running' || g.ms.status !== 'running') return;
+    if (g.phase !== 'running' || g.ms.status !== 'running' || g.ms.part === 'mini') return;
     if (now() + 30 < g.ms.catchAt) return scheduleCatch(g);
     g.ms.status = 'failed'; addFeed(g, g.mode === 'robot' ? '로봇' : '바다 괴물', '우리 반을 따라잡았어요!', false);
     finish(g);
   }, Math.max(0, g.ms.catchAt - now()));
 }
-function resumeMode(g) { if (g.ms && g.ms.kind === 'chase') scheduleCatch(g); }
+function resumeMode(g) { if (g.ms && g.ms.kind === 'chase') { if (g.ms.part === 'mini') startMiniTicker(g); else scheduleCatch(g); } }
+// ---------- 로봇 경주: 단계와 협동 미니게임 ----------
+const ROBOT = { stages: 6, miniLead: 4000, miniShow: 4500 };
+const MINI_MAP = { w: 1600, h: 900 };
+const MINI_SPECS = [
+  { type: 'cores', time: 35, drones: 0, many: false, title: '에너지 코어 모으기', desc: '흩어진 에너지 코어를 모두 모아요!' },
+  { type: 'plates', time: 40, drones: 0, need: 1, hold: 3000, title: '스위치 발판 켜기', desc: '친구들과 나눠서 발판 위에 3초 동안 서 있어요!' },
+  { type: 'deliver', time: 40, drones: 2, many: false, title: '부품 배달 작전', desc: '부품을 하나씩 들고 가운데 수리 기지로 옮겨요!' },
+  { type: 'cores', time: 35, drones: 3, many: true, title: '드론을 피해 코어 모으기', desc: '경비 드론에 닿으면 잠깐 멈춰요. 피하면서 코어를 모아요!' },
+  { type: 'plates', time: 40, drones: 3, need: 2, hold: 4000, title: '두 명이 함께 발판 켜기', desc: '발판마다 두 명이 함께 4초 동안 서 있어야 켜져요!' },
+  { type: 'deliver', time: 45, drones: 5, many: true, title: '최후의 탈출선 수리', desc: '드론을 피해 부품을 모두 옮기면 탈출 성공!' }
+];
+const stageGoalOf = (n, s) => Math.max(3, Math.round(n * (0.6 + 0.15 * (s - 1))));
+function miniRnd(a, b) { return a + (b - a) * crypto.randomInt(1000000) / 1000000; }
+function miniSpots(count, minGap, avoid) {
+  const out = [];
+  for (let i = 0; i < count; i++) {
+    let best = null;
+    for (let k = 0; k < 40; k++) {
+      const c = { x: Math.round(miniRnd(110, MINI_MAP.w - 110)), y: Math.round(miniRnd(150, MINI_MAP.h - 90)) };
+      const ok = out.every(o => Math.hypot(o.x - c.x, o.y - c.y) >= minGap) && (avoid || []).every(a => Math.hypot(a.x - c.x, a.y - c.y) >= a.r);
+      if (ok) { best = c; break; } if (!best) best = c;
+    }
+    out.push(best);
+  }
+  return out;
+}
+function startMini(g) {
+  const ms = g.ms; const players = activePlayers(g); const n = Math.max(1, players.length);
+  const spec = MINI_SPECS[Math.min(ms.stage, MINI_SPECS.length) - 1]; const t0 = now();
+  ms.pausedGap = Math.max(4000, ms.catchAt - t0);
+  if (g.catchTimer) { clearTimeout(g.catchTimer); g.catchTimer = null; }
+  const startAt = t0 + ROBOT.miniLead, endAt = startAt + spec.time * 1000;
+  const center = { x: MINI_MAP.w / 2, y: MINI_MAP.h / 2 + 30 };
+  const m = { type: spec.type, stage: ms.stage, title: spec.title, desc: spec.desc, startAt, endAt, w: MINI_MAP.w, h: MINI_MAP.h, status: 'ready', goal: 0, progress: 0, items: [], plates: [], base: null, drones: [], hold: spec.hold || 0, spawn: center, pos: {}, stun: {}, result: null };
+  if (spec.type === 'cores') {
+    const cnt = Math.round(n * (spec.many ? 1.6 : 1.2)) + (spec.many ? 3 : 2);
+    m.items = miniSpots(cnt, 70, [{ x: center.x, y: center.y, r: 140 }]).map((s, i) => ({ id: 'c' + i, x: s.x, y: s.y, by: null }));
+    m.goal = cnt;
+  } else if (spec.type === 'plates') {
+    const need = Math.min(spec.need, n); const k = Math.max(2, Math.min(spec.need === 2 ? 7 : 6, Math.ceil(n / (spec.need === 2 ? 2.5 : 3))));
+    m.plates = miniSpots(k, 260, [{ x: center.x, y: center.y, r: 180 }]).map((s, i) => ({ id: 'p' + i, x: s.x, y: s.y, r: 75, need, on: 0, holdFrom: null, done: false }));
+    m.goal = k;
+  } else {
+    m.base = { x: center.x, y: center.y, r: 95 };
+    const cnt = Math.round(n * (spec.many ? 1.2 : 0.8)) + (spec.many ? 2 : 1);
+    m.items = miniSpots(cnt, 80, [{ x: center.x, y: center.y, r: 320 }]).map((s, i) => ({ id: 'd' + i, x: s.x, y: s.y, hx: s.x, hy: s.y, carrier: null, done: false }));
+    m.goal = cnt;
+  }
+  const spd = 1 + 0.18 * Math.max(0, ms.stage - 3);
+  for (let i = 0; i < spec.drones; i++) {
+    if (i % 2 === 0) { const c = miniSpots(1, 0, [{ x: center.x, y: center.y, r: 420 }])[0]; m.drones.push({ id: 'z' + i, kind: 'circle', cx: c.x, cy: c.y, r: Math.round(miniRnd(110, 200)), w: Math.round(miniRnd(0.7, 1.1) * spd * 100) / 100 * (i % 4 === 0 ? 1 : -1), ph: Math.round(miniRnd(0, 6.28) * 100) / 100 }); }
+    else { const horiz = i % 4 === 1; const pos = Math.round(miniRnd(200, horiz ? MINI_MAP.h - 150 : MINI_MAP.w - 200)); m.drones.push({ id: 'z' + i, kind: 'line', ax: horiz ? 90 : pos, ay: horiz ? pos : 140, bx: horiz ? MINI_MAP.w - 90 : pos, by: horiz ? pos : MINI_MAP.h - 70, period: Math.round(miniRnd(6, 9) / spd * 10) / 10, ph: Math.round(miniRnd(0, 1) * 100) / 100 }); }
+  }
+  players.forEach((p, i) => { const a = (i / players.length) * Math.PI * 2; const rr = 60 + 22 * Math.floor(i / 12); m.pos[p.id] = { x: Math.round(center.x + Math.cos(a) * rr), y: Math.round(center.y + Math.sin(a) * rr), at: t0 }; });
+  ms.part = 'mini'; ms.mini = m;
+  const extra = ROBOT.miniLead + spec.time * 1000 + ROBOT.miniShow;
+  g.endsAt += extra; setTimer(g, g.endsAt - now(), () => finish(g));
+  addFeed(g, `${ms.stage}단계`, `미니게임 시작! ${spec.title}`);
+  startMiniTicker(g); touch(g);
+}
+function startMiniTicker(g) {
+  if (g.miniTick) clearInterval(g.miniTick);
+  g.miniTick = setInterval(() => { try { miniTick(g); } catch (e) { console.error('미니게임 오류', e); } }, 250);
+}
+function miniTick(g) {
+  const ms = g.ms, m = ms.mini; if (!m || g.phase !== 'running') { clearInterval(g.miniTick); g.miniTick = null; return; }
+  const t = now(); let changed = false;
+  if (m.status === 'ready' && t >= m.startAt) { m.status = 'playing'; changed = true; }
+  if (m.status === 'playing') {
+    if (m.type === 'plates') {
+      for (const pl of m.plates) {
+        if (pl.done) continue;
+        const on = Object.entries(m.pos).filter(([pid, q]) => g.players.has(pid) && Math.hypot(q.x - pl.x, q.y - pl.y) <= pl.r + 10).map(([pid]) => pid);
+        if (on.length !== pl.on) { pl.on = on.length; changed = true; }
+        if (on.length >= pl.need) { if (!pl.holdFrom) { pl.holdFrom = t; changed = true; } else if (t - pl.holdFrom >= m.hold) { pl.done = true; pl.holdFrom = null; m.progress++; changed = true; for (const pid of on) { const p = g.players.get(pid); if (p) { stat(p, 'mission'); arenaScore(g, p); } } addFeed(g, '발판', `${m.progress}/${m.goal} 켜졌어요!`); } }
+        else if (pl.holdFrom) { pl.holdFrom = null; changed = true; }
+      }
+    }
+    if (m.progress >= m.goal) return endMini(g, true);
+    if (t >= m.endAt) return endMini(g, false);
+  }
+  if (m.status === 'success' || m.status === 'fail') { if (t >= m.resultAt + ROBOT.miniShow) return resumeChase(g); }
+  if (changed) touch(g);
+}
+function endMini(g, ok) {
+  const ms = g.ms, m = ms.mini; m.status = ok ? 'success' : 'fail'; m.resultAt = now();
+  ms.pausedGap = ok ? Math.min(ms.gapMax, ms.pausedGap + 15000) : Math.max(5000, ms.pausedGap - 10000);
+  m.result = { ok, gapChange: ok ? 15 : -10 };
+  addFeed(g, `${ms.stage}단계`, ok ? '미니게임 성공! 로봇이 15초 뒤로 밀렸어요' : '미니게임 실패… 로봇이 10초 가까워졌어요', ok);
+  touch(g);
+}
+function resumeChase(g) {
+  const ms = g.ms, m = ms.mini; const ok = m.status === 'success';
+  clearInterval(g.miniTick); g.miniTick = null;
+  ms.lastMini = { stage: m.stage, type: m.type, title: m.title, ok };
+  ms.mini = null; ms.part = 'chase';
+  if (ms.stage >= ms.stages && ok) { ms.cleared = true; ms.status = 'success'; addFeed(g, '우리반', '모든 단계 클리어! 완전 탈출 성공!'); finish(g); return; }
+  if (ms.stage < ms.stages) ms.stage++;
+  ms.stageBoosts = 0; ms.stageGoal = stageGoalOf(Math.max(1, activePlayers(g).length), ms.stage);
+  ms.catchAt = now() + ms.pausedGap;
+  addFeed(g, `${ms.stage}단계`, '다시 달려요! 로봇이 더 빨라졌어요', false);
+  scheduleCatch(g); touch(g);
+}
+function miniAction(g, p, kind, target) {
+  const ms = g.ms, m = ms.mini; if (!m || g.phase !== 'running') return;
+  const t = now();
+  if (kind === 'move') {
+    const x = Number(target && target.x), y = Number(target && target.y); if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+    m.pos[p.id] = { x: Math.round(Math.max(0, Math.min(m.w, x))), y: Math.round(Math.max(0, Math.min(m.h, y))), at: t };
+    if (m.type === 'plates' && m.status === 'playing') miniTick(g); else touch(g); return;
+  }
+  if (m.status !== 'playing') return;
+  if (kind === 'pick') {
+    const it = m.items.find(x => x.id === String(target)); if (!it) return;
+    if (m.type === 'cores') { if (it.by) return; it.by = p.nickname; m.progress++; stat(p, 'mission'); }
+    else { if (it.done || it.carrier || m.items.some(x => x.carrier === p.id)) return; it.carrier = p.id; }
+  } else if (kind === 'deliver') {
+    const it = m.items.find(x => x.carrier === p.id && !x.done); if (!it) return;
+    it.done = true; it.carrier = null; it.by = p.nickname; m.progress++; stat(p, 'mission');
+  } else if (kind === 'mhit') {
+    m.stun[p.id] = t + 1500;
+    const it = m.items.find(x => x.carrier === p.id && !x.done); if (it) it.carrier = null;
+  } else return;
+  arenaScore(g, p);
+  if (m.progress >= m.goal) return endMini(g, true);
+  touch(g);
+}
+function miniView(g, m) {
+  if (!m) return null;
+  const pos = activePlayers(g).map(p => { const q = m.pos[p.id] || m.spawn; const it = m.items.find(x => x.carrier === p.id && !x.done); return { id: p.id, nickname: p.nickname, avatar: p.avatar || null, x: q.x, y: q.y, carry: it ? it.id : null, stun: m.stun[p.id] && m.stun[p.id] > now() ? m.stun[p.id] : null }; });
+  return { type: m.type, stage: m.stage, title: m.title, desc: m.desc, startAt: m.startAt, endAt: m.endAt, w: m.w, h: m.h, status: m.status, goal: m.goal, progress: m.progress, hold: m.hold, items: m.items.map(i => ({ id: i.id, x: i.x, y: i.y, by: i.by || null, carrier: i.carrier || null, done: !!i.done })), plates: m.plates.map(pl => ({ id: pl.id, x: pl.x, y: pl.y, r: pl.r, need: pl.need, on: pl.on, holdFrom: pl.holdFrom, done: pl.done })), base: m.base, drones: m.drones, spawn: m.spawn, result: m.result, resultAt: m.resultAt || null, players: pos };
+}
 function stat(p, k, d = 1) { p.st = p.st || {}; p.st[k] = (p.st[k] || 0) + d; return p.st[k]; }
 const stv = (p, k) => (p.st && p.st[k]) || 0;
 function arenaScore(g, p) {
   const c = p.correct * 100;
-  if (g.ms.kind === 'chase') p.score = c + stv(p, 'boosts') * 250;
+  if (g.ms.kind === 'chase') p.score = c + stv(p, 'boosts') * 250 + stv(p, 'mission') * 80;
   else if (g.ms.kind === 'marble') p.score = c + stv(p, 'marbles') * 50 + stv(p, 'gold') * 50;
   else if (g.ms.kind === 'kingdom') p.score = c + stv(p, 'tiles') * 20;
   else if (g.ms.kind === 'tower') p.score = c + stv(p, 'floors') * 20 + stv(p, 'perfect') * 10;
@@ -396,16 +546,19 @@ function arenaAction(g, p, kind, target) {
   const ms = g.ms; const a = p.actions; let message = '', points = 0, correct = true;
   if (kind === 'boost' || kind === 'symbol') {
     if (ms.kind !== 'chase' || !a || a.kind !== kind) fail(400, '지금은 부스트를 쓸 수 없어요.');
+    if (ms.part === 'mini') fail(409, '지금은 미니게임 중이에요. 미니게임이 끝나면 부스트를 써요!');
     let ok = true;
     if (kind === 'symbol') { const t = Number(target), n = now(); ok = Number.isInteger(t) && (t === symbolAt(ms, n) || (((n - ms.symStart) % ms.symPeriod) < 1800 && t === symbolAt(ms, n - 1800))); }
     p.actions = null; p.charge = 0;
     if (ok && ms.status === 'running') {
       const prog = Math.min(1, (now() - g.startAt) / Math.max(1, g.endsAt - g.startAt));
-      const gain = Math.round(ms.boostMs * (1 - 0.35 * prog));
+      const diff = ms.theme === 'robot' ? ms.stage - 1 : 0;
+      const gain = Math.round(ms.theme === 'robot' ? ms.boostMs * (1 - 0.06 * diff) / (1 + 0.15 * diff) * (1 - 0.15 * prog) : ms.boostMs * (1 - 0.35 * prog));
       ms.catchAt = Math.min(now() + ms.gapMax, Math.max(now(), ms.catchAt) + gain);
       ms.boosts++; ms.lastBoost = { nickname: p.nickname, at: now(), gain }; stat(p, 'boosts'); points = 250;
       message = `부스트 성공! ${ms.theme === 'robot' ? '로봇' : '바다 괴물'}에게서 ${Math.round(gain / 1000)}초 더 멀어졌어요.`;
       addFeed(g, p.nickname, '부스트!'); scheduleCatch(g);
+      if (ms.theme === 'robot' && ms.part === 'chase') { ms.stageBoosts++; if (ms.stageBoosts >= ms.stageGoal) startMini(g); }
     } else { correct = false; message = '기호가 달랐어요. 부스트 실패! 다시 에너지를 모아요.'; }
   } else if (kind === 'flags') {
     if (ms.kind !== 'kingdom' || !a || a.kind !== 'flags') fail(400, '지금은 깃발을 꽂을 수 없어요.');
@@ -497,7 +650,11 @@ function makeAwards(g) {
   const list = activePlayers(g); const best = (key, fn) => { let top = null, val = 0; for (const p of list) { const v = fn(p); if (v > val || (v === val && v > 0 && top && p.reachedAt < top.reachedAt)) { top = p; val = v; } } return top && val > 0 ? { nickname: top.nickname, avatar: top.avatar || null, value: val } : null; };
   const k = g.ms.kind; const out = [];
   const push = (id, title, desc, unit, fn) => { const b = best(id, fn); if (b) out.push({ id, title, desc, unit, ...b }); };
-  if (k === 'chase') { push('energizer', '에너자이저', '부스트를 가장 많이 쓴 친구', '번', p => stv(p, 'boosts')); push('leader', '리더', '정답을 가장 많이 맞힌 친구', '개', p => p.correct); push('explorer', '탐험가', '문제를 가장 많이 도전한 친구', '문제', p => p.answered); }
+  if (k === 'chase') { push('energizer', '에너자이저', '부스트를 가장 많이 쓴 친구', '번', p => stv(p, 'boosts')); push('leader', '리더', '정답을 가장 많이 맞힌 친구', '개', p => p.correct); push('explorer', '탐험가', '문제를 가장 많이 도전한 친구', '문제', p => p.answered); if (g.ms.theme === 'robot') push('teamwork', '협동왕', '미니게임 미션을 가장 많이 해낸 친구', '번', p => stv(p, 'mission')); }
+  if (k === 'runner') { push('streak', '연속 정답왕', '가장 길게 연속으로 맞힌 친구', '연속', p => stv(p, 'best')); push('dodger', '장애물 달인', '장애물을 가장 잘 피한 친구', '번', p => Math.max(0, stv(p, 'dodges') - stv(p, 'hits') * 2)); push('runner', '질주왕', '가장 멀리 달린 친구', 'm', p => stv(p, 'dist')); push('coin', '코인 수집왕', '코인을 가장 많이 모은 친구', '개', p => stv(p, 'coins')); }
+  if (k === 'garden') { push('fairy', '꽃 요정', '꽃을 가장 많이 피운 친구', '송이', p => stv(p, 'flowers')); push('rainbow', '무지개 정원사', '무지개 꽃을 가장 많이 피운 친구', '송이', p => stv(p, 'rare')); push('leader', '리더', '정답을 가장 많이 맞힌 친구', '개', p => p.correct); }
+  if (k === 'boss') { push('striker', '최강 공격수', '보스에게 가장 큰 피해를 준 친구', '', p => stv(p, 'dmg')); push('critical', '치명타 장인', '치명타를 가장 많이 낸 친구', '번', p => stv(p, 'crit')); if (g.ms.finisher) out.push({ id: 'finisher', title: '마지막 일격', desc: '보스를 쓰러뜨린 친구', unit: '', nickname: g.ms.finisher.nickname, avatar: g.ms.finisher.avatar, value: 0 }); }
+  if (k === 'treasure') { push('lucky', '행운왕', '가장 큰 보물을 찾은 친구', '금화', p => stv(p, 'bigWin')); push('opener', '상자 탐험가', '상자를 가장 많이 연 친구', '개', p => stv(p, 'chests')); push('leader', '리더', '정답을 가장 많이 맞힌 친구', '개', p => p.correct); }
   if (k === 'marble') { push('collector', '수집가', '마블을 가장 많이 모은 친구', '개', p => stv(p, 'marbles')); push('golden', '황금손', '황금 마블을 가장 많이 만든 친구', '개', p => stv(p, 'gold')); push('leader', '리더', '정답을 가장 많이 맞힌 친구', '개', p => p.correct); }
   if (k === 'kingdom') { push('pioneer', '개척자', '땅을 가장 많이 차지한 친구', '칸', p => stv(p, 'tiles')); push('leader', '리더', '정답을 가장 많이 맞힌 친구', '개', p => p.correct); push('explorer', '탐험가', '문제를 가장 많이 도전한 친구', '문제', p => p.answered); }
   if (k === 'tower') { push('builder', '건축왕', '가장 많은 층을 쌓은 친구', '층', p => stv(p, 'floors')); push('perfect', '완벽 장인', '완벽한 착지를 가장 많이 한 친구', '번', p => stv(p, 'perfect')); push('leader', '리더', '정답을 가장 많이 맞힌 친구', '개', p => p.correct); }
@@ -512,8 +669,8 @@ function nextPersonalQuestion(g, p) {
   }
   p.currentQ = p.queue.shift(); p.lastQ = p.currentQ; p.qStartedAt = now();
 }
-function arenaStats(p) { return { charge: p.charge || 0, boosts: stv(p, 'boosts'), marbles: stv(p, 'marbles'), gold: stv(p, 'gold'), tiles: stv(p, 'tiles'), floors: stv(p, 'floors'), perfect: stv(p, 'perfect') }; }
-function playerAnswer(g, p, q, ev, elapsed) {
+function arenaStats(p) { return { best: stv(p, 'best'), hits: stv(p, 'hits'), dodges: stv(p, 'dodges'), coins: stv(p, 'coins'), dist: stv(p, 'dist'), mission: stv(p, 'mission'), charge: p.charge || 0, boosts: stv(p, 'boosts'), marbles: stv(p, 'marbles'), gold: stv(p, 'gold'), tiles: stv(p, 'tiles'), floors: stv(p, 'floors'), perfect: stv(p, 'perfect') }; }
+function playerAnswer(g, p, q, ev, elapsed, meta) {
   const lostStreak = !ev.correct && p.streak >= 2;
   p.answered++; if (ev.correct) { p.correct++; p.streak++; } else p.streak = 0;
   const st = g.stats[g.questions.indexOf(q)] || (g.stats[g.questions.indexOf(q)] = { questionId: q.id, text: q.text, type: q.type, answered: 0, correct: 0 });
@@ -529,12 +686,25 @@ function playerAnswer(g, p, q, ev, elapsed) {
     if (ev.correct) { let boost = Math.round(4 + 6 * (1 - speedFactor(q, elapsed))); if (p.streak > 0 && p.streak % 3 === 0) boost += 2; p.dist = Math.min(ms.goal, p.dist + boost); p.lastBoost = boost; points = boost; message = `${boost}m 가속!`; }
     else { p.dist = Math.max(0, p.dist - 2); p.lastBoost = -2; message = '앗, 벽에 부딪혀 2m 밀려났어요.'; }
     p.score = p.dist; if (p.dist >= ms.goal && !p.finishedRank) finishLine(g, p);
+  } else if (g.mode === 'runner') {
+    const m = meta && typeof meta === 'object' ? meta : {}; const ci = (v, hi) => Math.max(0, Math.min(hi, Math.round(Number(v) || 0)));
+    const hits = ci(m.hits, 20), dodges = ci(m.dodges, 60), coins = ci(m.coins, 60), dist = ci(m.dist, 5000);
+    stat(p, 'hits', hits); stat(p, 'dodges', dodges); stat(p, 'coins', coins); stat(p, 'dist', dist);
+    if (ev.correct) {
+      const lv = Math.min(5, Math.max(0, p.streak - 1)); points = Math.round(100 * (1 + 0.2 * lv)) + coins * 10;
+      if (p.streak > stv(p, 'best')) { p.st.best = p.streak; }
+      message = lv ? `정답! 연속 ${p.streak}번, 속도 ${lv + 1}단계!` : '정답! 골인!';
+      if (p.streak > 0 && p.streak % 5 === 0) { points += 300; message = `피버 타임! ${p.streak}연속 정답 보너스 300점!`; addFeed(g, p.nickname, `${p.streak}연속 정답 피버!`); }
+    } else { points = -50; message = '오답 문으로 들어갔어요. 속도가 처음으로 돌아가고 50점이 깎였어요.'; }
+    if (hits) { points -= hits * 20; message += ` 장애물 ${hits}번 충돌 -${hits * 20}점`; }
+    if (coins && ev.correct) message += ` 코인 ${coins}개!`;
+    p.score = Math.max(0, p.score + points); p.reachedAt = now();
   } else if (g.mode === 'tower') {
     if (ev.correct) { const gold = elapsed <= q.timeLimit * 1000 / 3; const block = { color: MARBLE_COLORS[crypto.randomInt(MARBLE_COLORS.length)], gold, value: gold ? 2 : 1 }; p.blocks.push(block); p.height += block.value; points = block.value; message = gold ? '황금 블록! 2층 쌓았어요.' : '블록 한 층 쌓았어요.'; if (gold && p.streak % 3 === 0) addFeed(g, p.nickname, '황금 블록 연속!'); }
     else { const top = p.blocks.pop(); if (top) { p.height -= top.value; message = '블록이 하나 무너졌어요.'; } else message = '아쉬워요! 다시 도전!'; }
     p.score = p.height; p.reachedAt = now();
   } else if (g.mode === 'treasure') {
-    if (ev.correct) { p.actions = { kind: 'chest', remaining: 1 }; message = '정답! 보물상자를 하나 골라요.'; }
+    if (ev.correct) { const golden = p.streak >= 3 && p.streak % 3 === 0; p.actions = { kind: 'chest', remaining: 1, golden }; message = golden ? `연속 ${p.streak}번 정답! 황금 상자가 나타났어요!` : '정답! 보물상자를 하나 골라요.'; if (golden) addFeed(g, p.nickname, '황금 상자 등장!'); }
     else message = '아쉬워요! 다음 문제로 상자에 도전해요.';
   }
   if (g.mode !== 'tower' && points > 0) p.reachedAt = now();
@@ -551,18 +721,27 @@ function finishLine(g, p) {
 function openChest(g, p, choice) {
   if (!p.actions || p.actions.kind !== 'chest') fail(400, '지금은 상자를 열 수 없어요.');
   if (![0, 1, 2].includes(Number(choice))) fail(400, '상자를 고르세요.');
-  const roll = crypto.randomInt(100); let text, gain = 0;
-  if (roll < 30) { gain = 100; text = '금화 100개'; }
-  else if (roll < 55) { gain = 250; text = '금화 250개'; }
-  else if (roll < 70) { gain = 500; text = '금화 500개!'; }
-  else if (roll < 80) { gain = Math.min(Math.max(p.score, 50), 1000); text = `두 배 상자! 금화 ${gain}개`; }
-  else if (roll < 90) { for (const x of g.players.values()) x.score += 30; text = '나눔 상자! 모두에게 금화 30개'; }
-  else { text = '텅 빈 상자… 꽝!'; }
-  p.score += gain; p.reachedAt = now(); p.actions = null;
-  g.ms.events.unshift({ nickname: p.nickname, text }); g.ms.events.length = Math.min(g.ms.events.length, 10);
-  if (gain >= 500 || text.startsWith('나눔')) addFeed(g, p.nickname, text);
+  const golden = !!p.actions.golden; const roll = crypto.randomInt(100); let text, gain = 0, prize, victim = null;
+  const leader = activePlayers(g).filter(x => x.id !== p.id).sort((a, b) => b.score - a.score)[0];
+  const table = golden
+    ? [[25, 'gold250'], [55, 'gold500'], [75, 'double'], [90, 'magnet'], [100, 'jackpot']]
+    : [[25, 'gold100'], [45, 'gold250'], [57, 'gold500'], [60, 'jackpot'], [70, 'double'], [78, 'share'], [86, 'magnet'], [100, 'empty']];
+  prize = table.find(([lim]) => roll < lim)[1];
+  if (prize === 'gold100') { gain = 100; text = '금화 100개'; }
+  else if (prize === 'gold250') { gain = 250; text = '금화 250개!'; }
+  else if (prize === 'gold500') { gain = 500; text = '금화 500개!!'; }
+  else if (prize === 'jackpot') { gain = 1000; text = '잭팟! 금화 1000개!!!'; }
+  else if (prize === 'double') { gain = Math.min(Math.max(p.score, 100), 1000); text = `두 배 상자! 금화 ${gain}개`; }
+  else if (prize === 'share') { for (const x of g.players.values()) if (x.id !== p.id) x.score += 50; gain = 100; text = '나눔 상자! 모두에게 금화 50개, 나는 100개'; }
+  else if (prize === 'magnet') {
+    if (leader && leader.score > 0) { const take = Math.max(50, Math.min(400, Math.round(leader.score * 0.1))); leader.score = Math.max(0, leader.score - take); gain = take; victim = leader.nickname; text = `자석 상자! ${leader.nickname}에게서 금화 ${take}개를 끌어왔어요`; }
+    else { gain = 200; text = '자석 상자! 금화 200개'; }
+  } else { text = '텅 빈 상자… 꽝!'; }
+  p.score += gain; p.reachedAt = now(); p.actions = null; stat(p, 'chests'); if (gain > stv(p, 'bigWin')) p.st.bigWin = gain;
+  g.ms.events.unshift({ nickname: p.nickname, avatar: p.avatar || null, text, prize, gain, victim, golden, at: now() }); g.ms.events.length = Math.min(g.ms.events.length, 12);
+  if (gain >= 500 || prize === 'share' || prize === 'magnet') addFeed(g, p.nickname, text, prize !== 'magnet' || !victim);
   g.resultSeq++; ranking(g);
-  p.result = { seq: g.resultSeq, correct: true, points: gain, streak: p.streak, answerText: '', message: text, rank: p.rank, prevRank: p.lastRank ?? null, chest: Number(choice) }; p.lastRank = p.rank;
+  p.result = { seq: g.resultSeq, correct: true, points: gain, streak: p.streak, answerText: '', message: text, rank: p.rank, prevRank: p.lastRank ?? null, chest: Number(choice), prize, golden, victim }; p.lastRank = p.rank;
   nextPersonalQuestion(g, p);
 }
 function claimTile(g, p, target) {
@@ -584,8 +763,8 @@ function launchEnergy(g, p, target) {
 function finish(g, force) {
   if (g.phase === 'finished') return;
   if (g.mode === 'marble' && g.phase === 'running' && g.ms.stage === 'collect' && !force) { clearTimer(g); startRace(g); return; }
-  clearTimer(g); clearAuto(g); if (g.catchTimer) { clearTimeout(g.catchTimer); g.catchTimer = null; }
-  if (g.ms.kind === 'chase' && (g.ms.status === 'running' || g.ms.status === 'ready')) g.ms.status = g.phase === 'running' && now() < g.ms.catchAt ? 'success' : (g.phase === 'running' ? 'failed' : 'ready');
+  clearTimer(g); clearAuto(g); if (g.catchTimer) { clearTimeout(g.catchTimer); g.catchTimer = null; } if (g.miniTick) { clearInterval(g.miniTick); g.miniTick = null; }
+  if (g.ms.kind === 'chase' && (g.ms.status === 'running' || g.ms.status === 'ready')) g.ms.status = g.phase === 'running' && (g.ms.part === 'mini' || now() < g.ms.catchAt) ? 'success' : (g.phase === 'running' ? 'failed' : 'ready');
   if (g.ms.kind === 'chase' && g.phase === 'running') { const ranked = activePlayers(g); ranked.forEach(p => arenaScore(g, p)); }
   if (g.ms && g.ms.kind) g.ms.awards = makeAwards(g);
   if (g.pacing === 'host' && g.phase === 'question') reveal(g);
@@ -633,7 +812,7 @@ function joinGame(g, deviceKey, nickname, avatar) {
   if (g.phase !== 'lobby') addFeed(g, nick, '게임에 들어왔어요.');
   touch(g); return p;
 }
-function submitAnswer(g, p, questionId, answer) {
+function submitAnswer(g, p, questionId, answer, meta) {
   if (g.pacing === 'host') {
     if (g.phase !== 'question') fail(409, '지금은 답을 낼 수 없어요.');
     const q = g.questions[g.qIndex]; if (q.id !== questionId) fail(409, '이미 다음 문제로 넘어갔어요.');
@@ -655,11 +834,12 @@ function submitAnswer(g, p, questionId, answer) {
   if (p.finishedRank && (g.mode === 'robot' || g.mode === 'marble')) fail(409, '이미 결승선을 통과했어요!');
   if (ARENA_MODES.has(g.mode) && p.actions) fail(409, '먼저 지금 할 일을 끝내요.');
   if (g.mode === 'marble' && g.ms.stage !== 'collect') fail(409, '마블 레이스가 시작됐어요. 큰 화면을 보세요!');
+  if (g.mode === 'robot' && g.ms.part === 'mini') fail(409, '지금은 미니게임 중이에요!');
   if (p.currentQ === null || p.currentQ === undefined) fail(409, '보물상자를 먼저 골라요.');
   if (p.lockedUntil && p.lockedUntil > now()) fail(409, '잠깐 숨을 고르는 중이에요.');
   const q = g.questions[p.currentQ]; if (q.id !== questionId) fail(409, '문제가 바뀌었어요. 화면을 확인하세요.');
   const elapsed = now() - p.qStartedAt; const ev = evaluate(q, answer);
-  playerAnswer(g, p, q, ev, elapsed); touch(g);
+  playerAnswer(g, p, q, ev, elapsed, meta); touch(g);
   return { result: p.result };
 }
 
@@ -676,14 +856,15 @@ function hostQuestion(g, q, revealed) {
 function modeStateView(g) {
   const ms = g.ms, list = ranking(g);
   const lite = p => ({ id: p.id, nickname: p.nickname, avatar: p.avatar || null, team: p.team, correct: p.correct, answered: p.answered, ...arenaStats(p) });
-  if (ms.kind === 'chase') return { kind: 'chase', theme: ms.theme, status: ms.status, startAt: ms.startAt, endsAt: g.endsAt, catchAt: ms.catchAt, gapMax: ms.gapMax, boostMs: ms.boostMs, boosts: ms.boosts, lastBoost: ms.lastBoost, symSeed: ms.symSeed, symPeriod: ms.symPeriod, symStart: ms.symStart, symbols: SYMBOLS, runners: list.slice(0, 60).map(lite), awards: ms.awards };
+  if (ms.kind === 'chase') return { kind: 'chase', theme: ms.theme, status: ms.status, startAt: ms.startAt, endsAt: g.endsAt, catchAt: ms.catchAt, gapMax: ms.gapMax, boostMs: ms.boostMs, boosts: ms.boosts, lastBoost: ms.lastBoost, symSeed: ms.symSeed, symPeriod: ms.symPeriod, symStart: ms.symStart, symbols: SYMBOLS, runners: list.slice(0, 60).map(lite), awards: ms.awards, stage: ms.stage || 0, stages: ms.stages || 0, part: ms.part || 'chase', stageBoosts: ms.stageBoosts || 0, stageGoal: ms.stageGoal || 0, cleared: !!ms.cleared, lastMini: ms.lastMini || null, pausedGap: ms.part === 'mini' ? ms.pausedGap : null, mini: miniView(g, ms.mini) };
+  if (ms.kind === 'runner') return { kind: 'runner', players: list.slice(0, 60).map(p => ({ id: p.id, nickname: p.nickname, avatar: p.avatar || null, score: p.score, rank: p.rank, correct: p.correct, answered: p.answered, streak: p.streak, best: stv(p, 'best'), hits: stv(p, 'hits'), dodges: stv(p, 'dodges'), coins: stv(p, 'coins'), dist: stv(p, 'dist'), lastAt: p.reachedAt })), awards: ms.awards };
   if (ms.kind === 'marble') return { kind: 'marble', stage: ms.stage, raceStart: ms.raceStart, raceEnd: ms.raceEnd, marbles: ms.marbles, race: ms.race, players: list.slice(0, 60).map(p => ({ ...lite(p), color: p.color, finishedRank: p.finishedRank })), awards: ms.awards };
   if (ms.kind === 'kingdom') return { kind: 'kingdom', cols: ms.cols, rows: ms.rows, tiles: ms.tiles, castles: ms.castles, claims: ms.claims, teams: teamSummary(g), builders: list.slice(0, 60).map(lite), awards: ms.awards };
   if (ms.kind === 'tower') return { kind: 'tower', bonusEvery: ms.bonusEvery, towers: ms.towers, drops: ms.drops, teams: teamSummary(g), builders: list.slice(0, 60).map(lite), awards: ms.awards };
   if (g.mode === 'robot') return { goal: ms.goal, racers: list.map(p => ({ id: p.id, nickname: p.nickname, pos: p.pos, finishedRank: p.finishedRank, turbo: p.turbo, repairing: !!(p.lockedUntil && p.lockedUntil > now()) })) };
   if (g.mode === 'marble') return { goal: ms.goal, marbles: list.map(p => ({ id: p.id, nickname: p.nickname, dist: p.dist, color: p.color, finishedRank: p.finishedRank, lastBoost: p.lastBoost })) };
   if (g.mode === 'tower') return { towers: list.map(p => ({ id: p.id, nickname: p.nickname, height: p.height, blocks: p.blocks.slice(-30).map(b => ({ color: b.color, gold: b.gold })) })) };
-  if (g.mode === 'treasure') return { players: list.map(p => ({ id: p.id, nickname: p.nickname, gold: p.score })), events: ms.events };
+  if (g.mode === 'treasure') return { kind: 'treasure', players: list.slice(0, 60).map(p => ({ id: p.id, nickname: p.nickname, avatar: p.avatar || null, gold: p.score, streak: p.streak, chests: stv(p, 'chests') })), events: ms.events, awards: ms.awards || [] };
   if (g.mode === 'kingdom') return { cols: ms.cols, rows: ms.rows, tiles: ms.tiles, teams: teamSummary(g) };
   if (g.mode === 'space') return { planets: ms.planets, teams: teamSummary(g) };
   if (g.mode === 'submarine' || g.mode === 'garden' || g.mode === 'boss') return { ...ms };
@@ -723,7 +904,7 @@ function playerView(g, deviceKey) {
   let question = null, answered = false;
   let q = null;
   if (g.pacing === 'host' && g.phase === 'question') { q = g.questions[g.qIndex]; answered = g.answers.has(p.id); }
-  if (g.pacing === 'player' && g.phase === 'running' && p.currentQ !== null && p.currentQ !== undefined && !(ARENA_MODES.has(g.mode) ? (p.actions || (g.mode === 'marble' && g.ms.stage !== 'collect')) : (p.finishedRank && (g.mode === 'robot' || g.mode === 'marble')))) q = g.questions[p.currentQ];
+  if (g.pacing === 'player' && g.phase === 'running' && p.currentQ !== null && p.currentQ !== undefined && !(ARENA_MODES.has(g.mode) ? (p.actions || (g.mode === 'marble' && g.ms.stage !== 'collect') || (g.mode === 'robot' && g.ms.part === 'mini')) : (p.finishedRank && (g.mode === 'robot' || g.mode === 'marble')))) q = g.questions[p.currentQ];
   if (q) {
     const show = g.options.showOnDevice || g.pacing === 'player';
     question = { id: q.id, type: q.type, text: show ? q.text : null, image: show ? q.image : null, timeLimit: q.timeLimit, points: q.points, choiceCount: q.perm.length,
@@ -735,5 +916,5 @@ function playerView(g, deviceKey) {
     result: ['reveal', 'leaderboard', 'running', 'finished'].includes(g.phase) ? p.result : null, actions: p.actions, questionStartedAt: g.pacing === 'player' ? p.qStartedAt : g.startAt,
     leaderboard: g.mode === 'classic' && ['leaderboard', 'finished'].includes(g.phase) ? leaderboard(g) : [], podium: g.phase === 'finished' ? podium(g) : [] };
 }
-  window.KQEngine = { arenaAction, resumeMode, symbolAt, hexNeighbors, canClaim, ARENA_MODES, scheduleAuto, clearAuto, applySettings, normAvatar, HOOKS, games, MODES, modeOf, createGame, getGame, startGame, hostNext, reveal, finish, joinGame, submitAnswer, openChest, claimTile, launchEnergy, hostView, playerView, ranking, expectedPlayers, setTimer, clearTimer, startQuestion, startRun, normQuestion, normQuestions, publicQuestion, quizFromInput, randomNick, badName, clean, cleanText, id, iso, fail, THEMES };
+  window.KQEngine = { miniAction, MINI_SPECS, ROBOT, arenaAction, resumeMode, symbolAt, hexNeighbors, canClaim, ARENA_MODES, scheduleAuto, clearAuto, applySettings, normAvatar, HOOKS, games, MODES, modeOf, createGame, getGame, startGame, hostNext, reveal, finish, joinGame, submitAnswer, openChest, claimTile, launchEnergy, hostView, playerView, ranking, expectedPlayers, setTimer, clearTimer, startQuestion, startRun, normQuestion, normQuestions, publicQuestion, quizFromInput, randomNick, badName, clean, cleanText, id, iso, fail, THEMES };
 })();

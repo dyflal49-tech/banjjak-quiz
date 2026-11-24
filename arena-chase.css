@@ -147,3 +147,23 @@
   .ar-chase *{animation-duration:.01ms!important;animation-iteration-count:1!important;transition:none!important}
   .ar-chase-host.ar-chase-danger .ar-chase-vignette{animation:none;box-shadow:inset 0 0 6cqw 2cqw rgba(255,30,30,.55)}
 }
+
+/* ----- v5 로봇 경주 단계 ----- */
+.ar-chase-stage{margin-top:.25em;font-weight:800}
+.ar-chase-stage-top{display:flex;align-items:center;justify-content:center;gap:.6em}
+.ar-chase-stage-n{font-size:1.05em}.ar-chase-title .ar-chase-stage-n b{display:inline;line-height:1;font-size:1.5em;color:#ffd43b;font-variant-numeric:tabular-nums}
+.ar-chase-stage-dots{display:inline-flex;gap:.3em}
+.ar-chase-stage-dots i{width:.8em;height:.8em;border-radius:50%;background:rgba(255,255,255,.22);display:inline-block}
+.ar-chase-stage-dots i.done{background:#51cf66}
+.ar-chase-stage-dots i.on{background:#ffd43b;box-shadow:0 0 0 3px rgba(255,212,59,.35);animation:ar-chase-stagepulse 1s ease-in-out infinite alternate}
+.ar-chase-stage-bar{height:.55em;margin:.35em auto .25em;max-width:24em;border-radius:99px;background:rgba(255,255,255,.18);overflow:hidden}
+.ar-chase-stage-bar i{display:block;height:100%;background:linear-gradient(90deg,#74c0fc,#ffd43b);transform-origin:left;transition:transform .4s ease}
+.ar-chase-stage-row{display:flex;justify-content:center;gap:.6em;flex-wrap:wrap;font-size:.95em;opacity:.95}
+.ar-chase-stage-last{padding:0 .6em;border-radius:99px;background:rgba(255,255,255,.18)}
+.ar-chase-stage-last.good{background:#2f9e44}.ar-chase-stage-last.bad{background:#c92a2a}
+.ar-chase-banner.ar-chase-stagebanner{background:linear-gradient(135deg,#74c0fc,#845ef7);color:#fff}
+.ar-chase-banner.ar-chase-stagebanner.bad{background:linear-gradient(135deg,#ff8787,#c92a2a)}
+.ar-chase-pstage{display:block;margin-top:3px;font-size:12px;font-weight:800;color:#ffd43b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ar-chase-pstage.hot{color:#fff;background:#845ef7;border-radius:8px;padding:1px 6px}
+@keyframes ar-chase-stagepulse{to{transform:scale(1.25)}}
+@media (prefers-reduced-motion:reduce){.ar-chase-stage-dots i.on{animation:none}}

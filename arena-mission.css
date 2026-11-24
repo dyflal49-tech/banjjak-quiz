@@ -1,0 +1,105 @@
+/* 반짝퀴즈 로봇 경주 협동 미니게임 (ar-mis-) */
+.ar-mis{--ar-font:"Pretendard","Noto Sans KR","Malgun Gothic",system-ui,sans-serif;font-family:var(--ar-font);color:#fff;position:relative;overflow:hidden;user-select:none;-webkit-user-select:none}
+.ar-mis-host{width:100%;height:100%;min-height:220px;background:#0b1020;border-radius:inherit;container-type:size}
+.ar-mis-player{width:100%;height:calc(100dvh - 150px);min-height:360px;max-height:900px;background:#0b1020;border-radius:16px;box-shadow:0 6px 0 rgba(0,0,0,.25)}
+.ar-mis-stagebox{position:absolute;inset:0;outline:none}
+.ar-mis-player .ar-mis-stagebox{touch-action:none;cursor:grab}
+.ar-mis-player .ar-mis-stagebox:focus-visible{box-shadow:inset 0 0 0 2px rgba(255,212,59,.6)}
+.ar-mis-world{display:block;width:100%;height:100%}
+
+/* HUD */
+.ar-mis-hud{position:absolute;left:0;right:0;top:0;z-index:3;display:flex;gap:8px;align-items:stretch;padding:8px;pointer-events:none;font-size:clamp(11px,1.5cqw,18px)}
+.ar-mis-player .ar-mis-hud{font-size:12px;gap:6px;padding:6px}
+.ar-mis-hud>div{background:rgba(12,8,35,.62);border-radius:12px;padding:.35em .8em;box-shadow:0 3px 0 rgba(0,0,0,.25)}
+.ar-mis-hud-l{flex:1.4;min-width:0;display:flex;flex-direction:column;justify-content:center}
+.ar-mis-stage{font-weight:900;color:#ffd43b;font-size:.95em}
+.ar-mis-title{font-size:1.45em;font-weight:900;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ar-mis-place{opacity:.75;font-weight:700;font-size:.9em}
+.ar-mis-hud-c{flex:1;min-width:6em;text-align:center;font-weight:800}
+.ar-mis-hud-c span{display:block;opacity:.85;font-size:.9em}
+.ar-mis-hud-c b{font-size:1.6em;font-variant-numeric:tabular-nums}
+.ar-mis-bar{height:.55em;border-radius:99px;background:rgba(255,255,255,.18);overflow:hidden;margin-top:.15em}
+.ar-mis-bar i{display:block;height:100%;background:linear-gradient(90deg,#63e6be,#ffd43b);transform-origin:left;transform:scaleX(0);transition:transform .35s ease}
+.ar-mis-hud-r{flex:none;text-align:center;font-weight:800;min-width:5em}
+.ar-mis-hud-r span{display:block;opacity:.85;font-size:.9em}
+.ar-mis-time{font-size:1.6em;font-variant-numeric:tabular-nums}
+.ar-mis-time.hurry{color:#ff6b6b;animation:ar-mis-beat .5s ease-in-out infinite alternate}
+.ar-mis-player .ar-mis-title{font-size:1.25em}
+.ar-mis-player .ar-mis-hud-c b,.ar-mis-player .ar-mis-time{font-size:1.4em}
+@container (max-height:260px){.ar-mis-place{display:none}.ar-mis-title{font-size:1.1em}}
+
+/* 준비/결과 덮개 */
+.ar-mis-ready,.ar-mis-res{position:absolute;inset:0;z-index:5;display:flex;align-items:center;justify-content:center;background:rgba(8,6,25,.55);padding:12px;pointer-events:none}
+.ar-mis-ready[hidden],.ar-mis-res[hidden]{display:none}
+.ar-mis-ready-card,.ar-mis-res-card{background:linear-gradient(160deg,#5f3dc4,#3b1d72);border:4px solid #fff;border-radius:22px;padding:.9em 1.4em;text-align:center;max-width:min(720px,92%);box-shadow:0 14px 40px rgba(0,0,0,.45);font-size:clamp(12px,1.9cqw,22px)}
+.ar-mis-player .ar-mis-ready-card,.ar-mis-player .ar-mis-res-card{font-size:14px}
+.ar-mis-ready-stage{display:inline-block;background:#ffd43b;color:#3b1d72;font-weight:900;border-radius:99px;padding:.1em .9em}
+.ar-mis-ready-title{display:block;font-size:2em;font-weight:900;margin:.25em 0 .1em;line-height:1.15}
+.ar-mis-ready-card p{margin:.3em 0;font-weight:700}
+.ar-mis-ready-how{opacity:.9}
+.ar-mis-ready-warn{color:#ffa8a8}
+.ar-mis-ready-keys{background:rgba(255,255,255,.14);border-radius:10px;padding:.3em .6em}
+.ar-mis-cd-num{display:inline-grid;place-items:center;width:2.2em;height:2.2em;margin-top:.2em;border-radius:50%;background:#fff;color:#3b1d72;font-size:2.4em;font-weight:900}
+.ar-mis-res-card b{display:block;font-size:2.6em;font-weight:900;line-height:1.1}
+.ar-mis-res-card span{display:block;font-size:1.3em;font-weight:800;margin-top:.2em}
+.ar-mis-res-card small{display:block;font-size:1em;opacity:.9;margin-top:.4em;font-weight:700}
+.ar-mis-res.good .ar-mis-res-card{background:linear-gradient(160deg,#37b24d,#2b8a3e)}
+.ar-mis-res.bad .ar-mis-res-card{background:linear-gradient(160deg,#fa5252,#a61e4d)}
+.ar-mis-in .ar-mis-res-card{animation:ar-mis-stamp .6s cubic-bezier(.2,1.5,.4,1) both}
+.ar-mis-pop{animation:ar-mis-popk .45s cubic-bezier(.2,1.6,.4,1)}
+
+.ar-mis-cast{position:absolute;left:50%;bottom:8px;transform:translateX(-50%);z-index:3;background:rgba(12,8,35,.72);border-radius:99px;padding:.3em 1em;font-weight:700;font-size:clamp(11px,1.3cqw,16px);white-space:nowrap;max-width:94%;overflow:hidden;text-overflow:ellipsis;pointer-events:none}
+
+/* 학생 도구 */
+.ar-mis-keys{position:absolute;right:8px;top:64px;z-index:4;display:flex;flex-direction:column;align-items:flex-end;gap:2px;background:rgba(12,8,35,.72);border-radius:10px;padding:5px 9px;font-size:11px;font-weight:700;pointer-events:none}
+.ar-mis-keys b{color:#ffd43b;font-size:12px}
+.ar-mis-mm{position:absolute;right:8px;bottom:8px;z-index:4;width:124px;height:70px;pointer-events:none}
+.ar-mis-tip{position:absolute;left:8px;bottom:8px;right:140px;z-index:4;background:rgba(12,8,35,.78);border-radius:10px;padding:6px 10px;font-size:13px;font-weight:800;pointer-events:none}
+.ar-mis-joy{position:absolute;z-index:6;width:112px;height:112px;margin:-56px 0 0 -56px;border-radius:50%;background:rgba(255,255,255,.16);border:3px solid rgba(255,255,255,.5);pointer-events:none}
+.ar-mis-joy[hidden]{display:none}
+.ar-mis-joy i{position:absolute;left:50%;top:50%;width:48px;height:48px;border-radius:50%;background:#ffd43b;box-shadow:0 3px 0 rgba(0,0,0,.3);transform:translate(-50%,-50%)}
+.ar-mis-hitflash{animation:ar-mis-hit .5s ease}
+.ar-mis-offstrip{background:rgba(20,10,45,.75);border-radius:14px;padding:12px 14px;font-weight:800;text-align:center}
+
+/* 지도 위 물체 */
+.ar-mis-bob{animation:ar-mis-bob 1.6s ease-in-out infinite alternate;transform-box:fill-box;transform-origin:center}
+.ar-mis-picked>g{animation:ar-mis-picked .45s ease-out forwards;transform-box:fill-box;transform-origin:center}
+.ar-mis-part{animation:ar-mis-bob 1.9s ease-in-out infinite alternate;transform-box:fill-box;transform-origin:center}
+.ar-mis-carry .ar-mis-part{animation:none}
+.ar-mis-danger{fill:rgba(255,40,40,.1);stroke:rgba(255,80,80,.55);stroke-width:3;stroke-dasharray:8 8}
+.ar-mis-drone-body{animation:ar-mis-hover .7s ease-in-out infinite alternate;transform-box:fill-box;transform-origin:center}
+.ar-mis-eye{animation:ar-mis-eye 1.2s ease-in-out infinite alternate}
+.ar-mis-plate-pad{fill:rgba(116,192,252,.22);stroke:#74c0fc;stroke-width:5}
+.ar-mis-plate-in{fill:rgba(116,192,252,.18);stroke:rgba(255,255,255,.35);stroke-width:2;stroke-dasharray:6 8}
+.ar-mis-plate-n{fill:#ffd43b;font-size:28px;font-weight:900;paint-order:stroke;stroke:#1c2541;stroke-width:6px}
+.ar-mis-plate.some .ar-mis-plate-pad{fill:rgba(255,212,59,.28);stroke:#ffd43b}
+.ar-mis-plate.hold .ar-mis-plate-pad{fill:rgba(255,212,59,.42);stroke:#ffd43b;animation:ar-mis-glowk .5s ease-in-out infinite alternate}
+.ar-mis-plate.done .ar-mis-plate-pad{fill:rgba(81,207,102,.5);stroke:#b2f2bb;filter:drop-shadow(0 0 14px #51cf66)}
+.ar-mis-plate.done .ar-mis-plate-in{fill:rgba(81,207,102,.4)}
+.ar-mis-label{fill:#ffd43b;font-size:30px;font-weight:900;paint-order:stroke;stroke:#1c1c1c;stroke-width:7px}
+.ar-mis-spin{animation:ar-mis-spin 6s linear infinite;transform-box:fill-box;transform-origin:center}
+.ar-mis-screen{animation:ar-mis-blink 2.2s ease-in-out infinite alternate}
+.ar-mis-name{fill:#fff;font-size:22px;font-weight:900;paint-order:stroke;stroke:#14102e;stroke-width:6px}
+.ar-mis-name.me{fill:#ffd43b;font-size:26px}
+.ar-mis-me-ring{fill:none;stroke:#ffd43b;stroke-width:5;animation:ar-mis-glowk .8s ease-in-out infinite alternate}
+.ar-mis-player.stunned .ar-mis-av{opacity:.55}
+.ar-mis-stun{animation:ar-mis-spin 1s linear infinite;transform-box:fill-box;transform-origin:center}
+.ar-mis-float{font-size:30px;font-weight:900;fill:#fff;paint-order:stroke;stroke:#14102e;stroke-width:7px;animation:ar-mis-float 1.5s ease-out forwards}
+.ar-mis-float.good{fill:#63e6be}.ar-mis-float.bad{fill:#ff8787}
+.ar-mis-ring{animation:ar-mis-ringk .85s ease-out forwards;transform-box:fill-box;transform-origin:center}
+
+@keyframes ar-mis-bob{to{transform:translateY(-8px)}}
+@keyframes ar-mis-hover{to{transform:translateY(-6px)}}
+@keyframes ar-mis-eye{to{opacity:.45}}
+@keyframes ar-mis-picked{0%{transform:scale(1);opacity:1}100%{transform:scale(2.2);opacity:0}}
+@keyframes ar-mis-spin{to{transform:rotate(360deg)}}
+@keyframes ar-mis-blink{to{opacity:.2}}
+@keyframes ar-mis-glowk{to{opacity:.55}}
+@keyframes ar-mis-float{0%{transform:translateY(0);opacity:0}15%{opacity:1}100%{transform:translateY(-60px);opacity:0}}
+@keyframes ar-mis-ringk{0%{transform:scale(1);opacity:1}100%{transform:scale(5);opacity:0}}
+@keyframes ar-mis-beat{to{transform:scale(1.12)}}
+@keyframes ar-mis-stamp{0%{transform:scale(2.2) rotate(-6deg);opacity:0}60%{transform:scale(.94) rotate(1deg);opacity:1}100%{transform:scale(1) rotate(0)}}
+@keyframes ar-mis-popk{0%{transform:scale(.4)}100%{transform:scale(1)}}
+@keyframes ar-mis-hit{0%{box-shadow:inset 0 0 0 0 rgba(255,0,0,0)}30%{box-shadow:inset 0 0 0 30px rgba(255,40,40,.55)}100%{box-shadow:inset 0 0 0 0 rgba(255,0,0,0)}}
+@media (max-width:420px){.ar-mis-mm{width:96px;height:54px}.ar-mis-tip{right:112px;font-size:12px}.ar-mis-hud-l .ar-mis-title{font-size:1.1em}}
+@media (prefers-reduced-motion:reduce){.ar-mis-bob,.ar-mis-part,.ar-mis-drone-body,.ar-mis-eye,.ar-mis-spin,.ar-mis-screen,.ar-mis-me-ring,.ar-mis-stun,.ar-mis-plate.hold .ar-mis-plate-pad,.ar-mis-time.hurry{animation:none}.ar-mis-float{animation-duration:.01s}}

@@ -214,6 +214,7 @@
       lead: { w: 'sawtooth', v: 0.03, r: 0.1, leg: 0.85, lp: 2600, det: 6, o: 0 }, bassI: { w: 'triangle', v: 0.1, r: 0.06, leg: 0.6 }
     }
   };
+  TRACKS.runner = Object.assign({}, TRACKS.tower, { bpm: Math.round((TRACKS.tower.bpm || 120) * 1.18) });
   const DIG = '0123456789ABCDEF';
   const degSemi = (scale, d) => scale[d % scale.length] + 12 * Math.floor(d / scale.length);
   const chordOf = (T, deg) => [deg, deg + 2, deg + 4, deg + 6].map(d => degSemi(T.scale, d));

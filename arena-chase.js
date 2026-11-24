@@ -224,7 +224,7 @@
     st.boostVal = H('b', {}, '0');
     st.hud = H('div', { class: 'ar-chase-hud' },
       H('div', { class: 'ar-chase-gap' }, H('span', { class: 'ar-chase-lbl' }, T.chaser + '와 거리'), st.gapVal, H('div', { class: 'ar-chase-meter' }, st.gapFill)),
-      H('div', { class: 'ar-chase-title' }, H('b', {}, T.title), H('span', {}, T.tip)),
+      H('div', { class: 'ar-chase-title' }, H('b', {}, T.title), theme === 'robot' ? stageBlock(st) : H('span', {}, T.tip)),
       H('div', { class: 'ar-chase-stats' }, H('div', {}, H('span', {}, '탈출까지'), st.timeVal), H('div', {}, H('span', {}, '부스트'), st.boostVal)));
     root.append(st.hud);
     st.off = H('div', { class: 'ar-chase-off', hidden: true }, H('span', { class: 'ar-chase-off-arrow', 'aria-hidden': 'true' }), H('span', {}, ''));
@@ -385,6 +385,46 @@
     }
   }
 
+  // ---------- 로봇 경주: 단계 표시 ----------
+  const SEEN_STAGE = new WeakMap();
+  function stageBlock(st) {
+    st.stN = H('b', {}, '1');
+    st.stDots = Array.from({ length: 6 }, () => H('i'));
+    st.stFill = H('i');
+    st.stTxt = H('span', { class: 'ar-chase-stage-t' }, '');
+    st.stLast = H('span', { class: 'ar-chase-stage-last', hidden: true }, '');
+    return H('div', { class: 'ar-chase-stage' },
+      H('div', { class: 'ar-chase-stage-top' }, H('span', { class: 'ar-chase-stage-n' }, st.stN, ' / 6단계'), H('span', { class: 'ar-chase-stage-dots', 'aria-hidden': 'true' }, st.stDots)),
+      H('div', { class: 'ar-chase-stage-bar', 'aria-hidden': 'true' }, st.stFill),
+      H('div', { class: 'ar-chase-stage-row' }, st.stTxt, st.stLast));
+  }
+  function stageInfo(m) {
+    const stages = num(m.stages, 6) || 6, stage = clamp(num(m.stage, 1) || 1, 1, stages);
+    const sb = num(m.stageBoosts), sg = Math.max(1, num(m.stageGoal, 3));
+    return { stage, stages, sb, sg, ratio: clamp(sb / sg, 0, 1) };
+  }
+  function updateStage(st, v, root) {
+    if (!st.stN) return;
+    const m = msOf(v); const I = stageInfo(m);
+    txt(st.stN, String(I.stage));
+    st.stDots.forEach((d, i) => { cls(d, 'done', i < I.stage - 1 || (m.cleared && i < I.stages)); cls(d, 'on', i === I.stage - 1 && !m.cleared); });
+    st.stFill.style.transform = `scaleX(${I.ratio.toFixed(3)})`;
+    txt(st.stTxt, m.cleared ? '모든 단계 클리어!' : `다음 미니게임까지 부스트 ${Math.min(I.sb, I.sg)} / ${I.sg}`);
+    const lm = m.lastMini;
+    st.stLast.hidden = !lm;
+    if (lm) { txt(st.stLast, `지난 미션 ${lm.ok ? '성공' : '실패'}`); cls(st.stLast, 'good', !!lm.ok); cls(st.stLast, 'bad', !lm.ok); }
+    const prev = SEEN_STAGE.get(root);
+    if (prev === I.stage) return;
+    SEEN_STAGE.set(root, I.stage);
+    if (I.stage <= 1 || v.phase !== 'running' || (prev !== undefined && prev > I.stage)) return;
+    const b = st.banner; if (!b) return;
+    txt(b.firstChild, `${I.stage}단계 시작! 로봇이 더 빨라졌어요`);
+    txt(b.lastChild, lm ? (lm.ok ? '미니게임 성공! 로봇을 15초 뒤로 밀어냈어요' : '미니게임 실패… 로봇이 10초 가까워졌어요. 힘내요!') : '부스트를 모아 다음 미니게임을 열어요');
+    b.hidden = false; cls(b, 'ar-chase-stagebanner', true); cls(b, 'bad', !!(lm && !lm.ok)); replay(b, 'ar-chase-in');
+    clearTimeout(st.bannerT); st.bannerT = later(st, () => { b.hidden = true; cls(b, 'ar-chase-stagebanner', false); cls(b, 'bad', false); }, 3600);
+    snd(lm && !lm.ok ? 'wrong' : 'levelup');
+  }
+
   function onBoost(st, v, theme) {
     const lb = msOf(v).lastBoost;
     const at = lb && lb.at ? num(lb.at) : null;
@@ -394,6 +434,7 @@
     if (now() - at > 6000) return;
     st.burst = 1.4; st.surge = 46;
     const b = st.banner;
+    cls(b, 'ar-chase-stagebanner', false); cls(b, 'bad', false);
     txt(b.firstChild, `${str(lb.nickname)} 부스트!`);
     txt(b.lastChild, `${THEME[theme].chaser}와 거리 +${Math.round(num(lb.gain) / 1000)}초`);
     b.hidden = false; replay(b, 'ar-chase-in');
@@ -429,8 +470,9 @@
     st.hud.hidden = true;
     const win = m.status === 'success', lose = m.status === 'failed';
     const survived = m.startAt && m.catchAt ? Math.max(0, num(m.catchAt) - num(m.startAt)) : 0;
-    const title = win ? T.escape : lose ? T.caught : '게임이 끝났어요';
-    const sub = win ? `부스트 ${num(m.boosts)}번으로 끝까지 버텼어요!` : lose ? `부스트 ${num(m.boosts)}번, ${fmtClock(survived)} 동안 버텼어요. 다음엔 꼭 탈출해요!` : '';
+    const robotStage = theme === 'robot' && num(m.stage) ? `${m.cleared ? num(m.stages, 6) : num(m.stage)}/${num(m.stages, 6)}단계 도달 · ` : '';
+    const title = win && theme === 'robot' && m.cleared ? '6단계 완전 탈출 성공!' : win ? T.escape : lose ? T.caught : '게임이 끝났어요';
+    const sub = robotStage + (win ? `부스트 ${num(m.boosts)}번으로 끝까지 버텼어요!` : lose ? `부스트 ${num(m.boosts)}번, ${fmtClock(survived)} 동안 버텼어요. 다음엔 꼭 탈출해요!` : '');
     const awards = arr(m.awards).slice(0, 3).map(a => H('div', { class: 'ar-chase-award' },
       H('span', { class: 'ar-chase-award-av' }, avatarSvg(a, 46)),
       H('span', { class: 'ar-chase-award-t' }, str(a.title)), H('b', {}, str(a.nickname)), H('small', {}, `${num(a.value)}${str(a.unit)}`)));
@@ -453,7 +495,7 @@
       st.root = root; st.view = v;
       if (phase === 'intro') { updateIntro(st, v); return; }
       layoutSquad(st, v, theme);
-      if (phase === 'run') onBoost(st, v, theme);
+      if (phase === 'run') { onBoost(st, v, theme); if (theme === 'robot') updateStage(st, v, root); }
       void m;
     };
   }
@@ -462,7 +504,8 @@
   function gapMeter(st, theme) {
     st.pGap = H('b', {}, '');
     st.pFill = H('i');
-    return H('div', { class: 'ar-chase-pgap' }, H('span', {}, THEME[theme].chaser + '까지'), st.pGap, H('div', { class: 'ar-chase-meter' }, st.pFill));
+    st.pStage = theme === 'robot' ? H('small', { class: 'ar-chase-pstage' }, '') : null;
+    return H('div', { class: 'ar-chase-pgap' }, H('span', {}, THEME[theme].chaser + '까지'), st.pGap, H('div', { class: 'ar-chase-meter' }, st.pFill), st.pStage);
   }
   function tickGap(st) {
     const loop = () => {
@@ -475,6 +518,12 @@
       txt(st.pGap, m.status === 'success' ? '탈출!' : m.status === 'failed' ? '잡힘' : gap === null ? '출발 전' : fmtSec(gap));
       st.pFill.style.transform = `scaleX(${gap === null ? 0.42 : clamp(gap / (num(m.gapMax, 60000) || 60000), 0, 1).toFixed(3)})`;
       cls(st.root, 'ar-chase-danger', m.status === 'running' && v.phase === 'running' && gap !== null && gap < DANGER_MS);
+      if (st.pStage) {
+        const I = stageInfo(m);
+        txt(st.pStage, m.cleared ? '모든 단계 클리어!' : `${I.stage}/${I.stages}단계 · 미니게임까지 부스트 ${Math.min(I.sb, I.sg)}/${I.sg}`);
+        const prev = SEEN_STAGE.get(st.root);
+        if (prev !== I.stage) { SEEN_STAGE.set(st.root, I.stage); if (prev !== undefined && I.stage > prev) { replay(st.pStage, 'ar-chase-pop'); cls(st.pStage, 'hot', true); later(st, () => cls(st.pStage, 'hot', false), 3500); snd('levelup'); } }
+      }
     };
     st.raf = requestAnimationFrame(loop);
   }

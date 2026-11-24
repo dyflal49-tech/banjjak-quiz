@@ -199,6 +199,15 @@
     else if (['reveal', 'leaderboard'].includes(g.phase) && s.autoAt) E.scheduleAuto(g, s.autoAt - Date.now());
     return g;
   }
+  const MINI_KINDS = ['move', 'pick', 'deliver', 'mhit'];
+  async function fire(pin, payload) {
+    await ready; await waitUser();
+    if (!uid()) throw friendly(authError || { code: 'auth/operation-not-allowed' });
+    const doc = { uid: uid(), type: 'action', reqId: E.id(), at: TS() };
+    for (const [k, v] of Object.entries(payload)) if (v !== undefined) doc[k] = v;
+    try { await gameRef(pin).collection('inbox').add(doc); } catch (e) { throw friendly(e); }
+    return { ok: true };
+  }
   function handle(h, docId, d) {
     const g = h.g, u = d.uid; let reply;
     try {
@@ -210,6 +219,12 @@
         const p = [...g.players.values()].find(x => x.deviceKey === u);
         if (!p) fail(403, g.kicked.has(u) ? '진행자가 이 기기를 게임에서 내보냈어요.' : '먼저 게임에 참가하세요.');
         if (d.type === 'answer') { const r = E.submitAnswer(g, p, String(d.questionId || ''), d.answer); reply = { ok: true, body: { ok: true, ...r } }; }
+        else if (d.type === 'action' && MINI_KINDS.includes(d.kind)) {
+          E.miniAction(g, p, d.kind, d.target);
+          const ms0 = d.at && d.at.toMillis ? d.at.toMillis() : 0; if (ms0 > h.lastTs) h.lastTs = ms0;
+          return;
+        }
+        else if (d.type === 'action' && d.kind === 'runAnswer') { const t = d.target || {}; const r = E.submitAnswer(g, p, String(t.questionId || ''), t.answer, t.meta || null); reply = { ok: true, body: { ok: true, ...r } }; }
         else if (d.type === 'action') {
           if (['boost', 'symbol', 'flags', 'stack'].includes(d.kind)) E.arenaAction(g, p, d.kind, d.target);
           else if (d.kind === 'claim') E.claimTile(g, p, d.target);
@@ -476,6 +491,7 @@
       }
       if (action === 'join') return request(pin, 'join', { nickname: E.clean(d && d.nickname, 15), avatar: E.normAvatar(d && d.avatar) });
       if (action === 'answer') return request(pin, 'answer', { questionId: String(d.questionId || ''), answer: d.answer === undefined ? null : d.answer });
+      if (action === 'action' && MINI_KINDS.includes(String(d.kind))) return fire(pin, { kind: String(d.kind), target: d.target === undefined ? null : d.target });
       if (action === 'action') return request(pin, 'action', { kind: String(d.kind || ''), target: d.target === undefined ? null : d.target });
     }
     // 리포트

@@ -608,3 +608,17 @@
 .lv-fin-extra.bad{background:#c92a2a}
 .lv-fin-extra.award{background:#ffd43b;color:#3b1d72}
 @media (prefers-reduced-motion: reduce){.lv-howto-step{transition:none}}
+
+/* ===== v5: 호명, 미니게임 제목, 퀴즈 런 ===== */
+.lv-callout{position:fixed;left:50%;top:42%;transform:translate(-50%,-50%) scale(.4);z-index:9000;display:flex;flex-direction:column;align-items:center;gap:6px;pointer-events:none;animation:lv-callout 2.5s cubic-bezier(.2,1.4,.4,1) forwards}
+.lv-callout-big{font-size:clamp(40px,7vw,96px);font-weight:900;color:#ffd43b;-webkit-text-stroke:3px #3b1d72;paint-order:stroke;text-shadow:0 8px 0 rgba(0,0,0,.35)}
+.lv-callout-name{font-size:clamp(30px,5vw,72px);font-weight:900;color:#fff;background:linear-gradient(90deg,#ff6b6b,#845ef7,#339af0);padding:6px 28px;border-radius:999px;box-shadow:0 10px 30px rgba(0,0,0,.4);max-width:80vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lv-callout.place-1 .lv-callout-big{font-size:clamp(56px,9vw,128px)}
+.lv-callout.award .lv-callout-big{font-size:clamp(30px,5vw,64px);color:#fff;-webkit-text-stroke:2px #b8860b}
+.lv-callout.award .lv-callout-name{background:linear-gradient(90deg,#f59f00,#ffd43b)}
+@keyframes lv-callout{0%{opacity:0;transform:translate(-50%,-50%) scale(.4)}14%{opacity:1;transform:translate(-50%,-50%) scale(1.08)}22%{transform:translate(-50%,-50%) scale(1)}80%{opacity:1;transform:translate(-50%,-50%) scale(1)}100%{opacity:0;transform:translate(-50%,-62%) scale(.9)}}
+.lv-act-head.lv-act-slim{padding:8px 10px 2px}.lv-act-head.lv-act-slim h1{font-size:clamp(18px,4.2vw,26px)}
+.lv-player.lv-bg-runner{background:#1b1035}
+.lv-player.lv-bg-runner .lv-pmain{display:none}
+.lv-player.lv-bg-runner .lv-mode-panel{max-width:none;padding:0;flex:1;display:flex}
+@media (prefers-reduced-motion: reduce){.lv-callout{animation:none;transform:translate(-50%,-50%)}}

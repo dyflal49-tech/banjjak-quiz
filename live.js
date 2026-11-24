@@ -31,12 +31,13 @@
     { id: 'boss', color: '#7a1fa2', name: '보스 레이드', pacing: 'host', teams: false, original: true, description: '모두의 정답으로 거대한 보스를 물리쳐요.' },
     { id: 'robot', color: '#0aa3a3', name: '로봇 경주', pacing: 'player', teams: false, original: false, description: '각자 문제를 풀며 로봇을 결승선까지 달리게 해요.' },
     { id: 'marble', color: '#c2410c', name: '마블 레이스', pacing: 'player', teams: false, original: false, description: '정답을 맞힐수록 구슬이 빠르게 굴러가요.' },
-    { id: 'tower', color: '#1368ce', name: '하늘 탑 쌓기', pacing: 'player', teams: false, original: true, description: '정답마다 블록을 쌓아 가장 높은 탑을 만들어요.' },
+    { id: 'runner', color: '#ff6b00', name: '퀴즈 런', pacing: 'player', teams: false, original: true, description: '장애물을 피해 달리며 정답 문으로 골인해요.' },
     { id: 'treasure', color: '#b37f00', name: '행운의 보물상자', pacing: 'player', teams: false, original: true, description: '정답을 맞히면 보물상자를 골라 행운을 시험해요.' }
   ];
   const COOP = new Set(['robot', 'submarine', 'garden', 'boss']);
   const ARENA = new Set(['robot', 'submarine', 'marble', 'kingdom', 'space']);
   const ARENA_ACT = { boost: ['부스트 준비 완료!', '아래 버튼을 길게 눌러 부스트를 쏘아요.'], symbol: ['큰 화면을 보세요!', '큰 화면에 나온 기호와 같은 기호를 골라요.'], flags: ['깃발을 꽂을 차례!', '우리 팀 땅과 맞닿은 칸을 골라요.'], blocks: ['블록을 떨어뜨릴 차례!', '움직이는 블록을 알맞은 때 눌러요.'] };
+  const TUTOR = new Set(['robot', 'submarine', 'marble', 'kingdom', 'space', 'runner', 'treasure']);
   const howToOf = id => { try { const m = window.KQModes && window.KQModes.get(id); return m && Array.isArray(m.howTo) ? m.howTo : []; } catch { return []; } };
   const TEAM_MODES = new Set(['kingdom', 'space']);
   const fmtPin = pin => String(pin || '').replace(/^(\d{3})(\d{3})$/, '$1 $2');
@@ -264,7 +265,7 @@
 
     function sigOf(v) {
       const q = v.question;
-      return ['v', v.phase, q ? q.id : '-', (v.answered || isSubmitted(v)) ? 1 : 0, q?.ownQuestion ? 1 : 0, isLocked(v) ? 1 : 0, v.actions?.kind || '', v.result ? v.result.seq : '', v.me?.team ?? '', v.mode === 'marble' ? (v.modeState?.stage || '') : ''].join('|');
+      return ['v', v.phase, q ? q.id : '-', (v.answered || isSubmitted(v)) ? 1 : 0, q?.ownQuestion ? 1 : 0, isLocked(v) ? 1 : 0, v.actions?.kind || '', v.result ? v.result.seq : '', v.me?.team ?? '', v.mode === 'marble' ? (v.modeState?.stage || '') : v.mode === 'robot' ? (v.modeState?.part || '') : ''].join('|');
     }
 
     function rankUpOf(res, v) {
@@ -281,7 +282,7 @@
       if (res.correct === true) { snd('correct'); vibrate(60); }
       else if (res.correct === false) { snd('wrong'); vibrate([80, 60, 80]); }
       else snd('sparkle');
-      if (phase === 'running') showFlash(res);
+      if (phase === 'running' && !(view && view.mode === 'runner')) showFlash(res);
       return true;
     }
     // 진행자가 넘기는 게임의 정답 공개 효과 (같은 seq 로는 한 번만: noteResult 가 걸러 줌)
@@ -387,6 +388,8 @@
         case 'countdown': return countdownScreen(v);
         case 'question':
         case 'running': {
+          if (v.phase === 'running' && v.mode === 'robot' && v.modeState && v.modeState.part === 'mini' && v.modeState.mini) return { node: el('div', { class: 'lv-act-head lv-act-slim' }, el('h1', {}, `${v.modeState.mini.stage}단계 미니게임!`), el('p', {}, v.modeState.mini.title || '')), bg: 'lv-bg-purple', panelBig: true };
+          if (v.phase === 'running' && v.mode === 'runner') return { node: el('div', { class: 'lv-runner-slot' }), bg: 'lv-bg-runner', panelBig: true, full: true };
           if (v.phase === 'running' && v.actions && ARENA_ACT[v.actions.kind]) { const [t1, t2] = ARENA_ACT[v.actions.kind]; return { node: el('div', { class: 'lv-act-head' }, el('h1', {}, v.actions.bonus ? '보너스 파워업! ' + t1 : t1), el('p', {}, t2)), bg: 'lv-bg-purple', panelBig: true }; }
           if (v.phase === 'running' && v.mode === 'marble' && v.modeState && v.modeState.stage === 'race') return { node: el('div', { class: 'lv-act-head' }, el('h1', {}, '마지막 레이스!'), el('p', {}, '큰 화면을 보세요. 내 마블을 응원해요!')), bg: 'lv-bg-purple', panelBig: true };
           if (v.phase === 'running' && isLocked(v)) return lockScreen(v);
@@ -532,7 +535,7 @@
         if (n !== lastN) { lastN = n; const s = el('span', { class: 'lv-count-num' }, String(n)); big.replaceChildren(s); }
       };
       tick(v);
-      const how = ARENA.has(v.mode) ? howToOf(v.mode) : [];
+      const how = TUTOR.has(v.mode) ? howToOf(v.mode) : [];
       return { node: el('div', { class: 'lv-center-msg' }, el('p', { class: 'lv-lead' }, v.quizTitle || ''), big, el('h1', {}, '준비!'), how.length ? el('ol', { class: 'lv-howto-mini' }, how.map(t => el('li', {}, t))) : null), bg: 'lv-bg-purple', tick, update: tick };
     }
 
@@ -829,6 +832,7 @@
 
     function choose(info) {
       selected = info;
+      if (info.id === 'robot' && state.durationMin < 10) state.durationMin = 10;
       for (const [id, c] of cards) { const on = id === info.id; c.classList.toggle('selected', on); c.setAttribute('aria-pressed', String(on)); }
       drawOptions();
       optsBox.hidden = false;
@@ -859,9 +863,11 @@
           check('skipOwnQuestions', '학생이 낸 문제는 출제자가 풀지 않기')),
         el('div', { class: 'lv-opts-grid' },
           info.teams ? select('teamCount', '팀 수', [2, 3, 4], v => `${v}팀`) : null,
-          info.pacing === 'player' ? select('durationMin', '게임 시간', [2, 3, 5, 7, 10], v => `${v}분`) : null,
+          info.pacing === 'player' ? select('durationMin', '게임 시간', [2, 3, 5, 7, 10, 15], v => `${v}분`) : null,
           info.pacing !== 'player' ? select('autoAdvance', '결과 자동 넘김', AUTO_CHOICES, v => v ? `${v}초 뒤 자동으로 넘김` : '끔 (선생님이 직접 넘김)') : null),
         info.pacing !== 'player' ? el('p', { class: 'lv-help' }, '정답 공개와 점수판이 정한 시간 뒤에 저절로 다음으로 넘어가요. 게임 중에도 상단의 설정에서 바꿀 수 있어요.') : null,
+        info.id === 'robot' ? el('p', { class: 'lv-help' }, '로봇 경주는 6단계(단계마다 협동 미니게임)까지 있어요. 끝까지 가려면 10분 이상을 추천해요. 미니게임 시간은 게임 시간에서 빠지지 않아요.') : null,
+        info.id === 'runner' ? el('p', { class: 'lv-help' }, '퀴즈 런은 객관식과 참/거짓 문제로만 진행해요. 학생 기기는 키보드(방향키, 스페이스바)나 터치로 조작해요.') : null,
         info.pacing === 'player' && pollCount ? el('p', { class: 'notice' }, `각자 속도 게임에서는 설문 문제 ${pollCount}개를 빼고 진행해요.`) : null,
         !qs.length || usable <= 0 ? el('p', { class: 'notice warn' }, '이 모드로 풀 수 있는 문제가 없어요. 먼저 문제를 추가하세요.') : null,
         el('div', { class: 'row' }, el('span', { class: 'spacer' }), createBtn));
@@ -1173,6 +1179,9 @@
     }
     // 시상식: 드럼롤 → 3위 → 2위 → 1위 (등장마다 폭죽 + 쿵), 1위에 불꽃놀이·색종이 비·팡파르
     const POD_DELAY = { 3: 1.9, 2: 3.0, 1: 4.3 };
+    const teamsSortedLen = v => (v.teamsEnabled && Array.isArray(v.teams) ? v.teams.length : 0);
+    function speak(text) { try { if (!KQ.sound || !KQ.sound.enabled || !window.speechSynthesis) return; const u = new SpeechSynthesisUtterance(text); u.lang = 'ko-KR'; u.rate = 1.02; u.pitch = 1.1; window.speechSynthesis.speak(u); } catch { /* 무시 */ } }
+    function callout(host, big, name, cls) { if (!host) return; const c = el('div', { class: 'lv-callout ' + (cls || ''), 'aria-hidden': 'true' }, el('span', { class: 'lv-callout-big' }, big), el('span', { class: 'lv-callout-name' }, name || '')); host.append(c); setTimeout(() => c.remove(), 2600); }
     function finishFx() {
       const sc = screen || {};
       const base = sc.delayBase || 0;
@@ -1191,6 +1200,8 @@
         later(() => {
           fxCall('burst', who, { count: place === 1 ? 110 : 60 });
           snd('boom');
+          const nm = (sc.podNames || {})[place] || '';
+          callout(sc.node, `${place}위`, nm, 'place-' + place); speak(`${place}위, ${nm}!`);
           if (place === 1) {
             if (sc.node) sc.node.classList.add('lv-spot-on');
             fxCall('fireworks', 6000);
@@ -1201,6 +1212,7 @@
         }, (base + POD_DELAY[place] + 0.6) * 1000);
       });
       later(() => { podiumStarted = true; if (bgmOn()) bgmCall('play', 'podium'); }, pods[1] ? (base + POD_DELAY[1] + 2.6) * 1000 : 1500);
+      (sc.awards || []).forEach((a, i) => later(() => { const n = (sc.awardNodes || [])[i]; if (n) { fxCall('burst', n, { count: 50 }); fxCall('stars', n); } snd('levelup'); callout(sc.node, '특별상 ' + (a.title || ''), a.nickname || '', 'award'); speak(`특별상, ${a.title}, ${a.nickname}!`); }, (base + POD_DELAY[1] + 2.4 + i * 1.6) * 1000 + 300));
     }
 
     function buildHost(v) {
@@ -1300,10 +1312,11 @@
         const n = Math.max(1, KQ.secondsLeft(vv.endsAt) || 1);
         if (n !== lastN) { lastN = n; big.replaceChildren(el('span', { class: 'lv-hcount-num' }, String(n))); KQ.sound.play('countdown'); }
       };
-      const how = ARENA.has(v.mode) ? howToOf(v.mode) : [];
+      const how = TUTOR.has(v.mode) ? howToOf(v.mode) : [];
+      const cdTotal = v.mode === 'runner' ? 12000 : 9000;
       const steps = how.map((t, i) => el('li', { class: 'lv-howto-step' }, el('span', { class: 'lv-howto-num' }, String(i + 1)), el('span', {}, t)));
       const tick0 = tick;
-      const tick2 = vv => { tick0(vv); if (!steps.length) return; const total = Math.max(1, (vv.endsAt || 0) - (vv.startedCountdownAt || 0)); const left = Math.max(0, (vv.endsAt || 0) - KQ.now()); const idx = Math.min(steps.length - 1, Math.floor((9000 - left) / (8000 / steps.length))); steps.forEach((s, i) => { s.classList.toggle('on', i === idx); s.classList.toggle('done', i < idx); }); };
+      const tick2 = vv => { tick0(vv); if (!steps.length) return; const total = Math.max(1, (vv.endsAt || 0) - (vv.startedCountdownAt || 0)); const left = Math.max(0, (vv.endsAt || 0) - KQ.now()); const idx = Math.min(steps.length - 1, Math.floor((cdTotal - left) / ((cdTotal - 1000) / steps.length))); steps.forEach((s, i) => { s.classList.toggle('on', i === idx); s.classList.toggle('done', i < idx); }); };
       tick2(v);
       const host = v.pacing !== 'player' && v.questionCount;
       const node = el('div', { class: 'lv-hcountdown' },
@@ -1549,8 +1562,9 @@
         parts.push(el('div', { class: 'lv-team-result' }, res));
       }
       const awards = v.modeState && Array.isArray(v.modeState.awards) ? v.modeState.awards.slice(0, 4) : [];
-      if (awards.length) parts.push(el('div', { class: 'lv-awards' }, awards.map((a, i) => el('div', { class: 'lv-award pop-in', style: { animationDelay: (1.6 + i * 0.35) + 's' } }, el('span', { class: 'lv-award-title' }, a.title || ''), avatarNode(a.avatar, 56, a.nickname, 'lv-award-av'), el('span', { class: 'lv-award-name' }, a.nickname || ''), el('span', { class: 'lv-award-desc' }, (a.desc || '') + (a.value ? ` · ${num(a.value)}${a.unit || ''}` : ''))))));
+      if (awards.length) parts.push(el('div', { class: 'lv-awards' }, awards.map((a, i) => el('div', { class: 'lv-award pop-in', 'data-award': String(i), style: { animationDelay: ((teamsSortedLen(v) ? 0.8 : 0) + POD_DELAY[1] + 2.4 + i * 1.6) + 's' } }, el('span', { class: 'lv-award-title' }, a.title || ''), avatarNode(a.avatar, 56, a.nickname, 'lv-award-av'), el('span', { class: 'lv-award-name' }, a.nickname || ''), el('span', { class: 'lv-award-desc' }, (a.desc || '') + (a.value ? ` · ${num(a.value)}${a.unit || ''}` : ''))))));
       const delayBase = teamsSorted.length ? 0.8 : 0;
+      const podNames = {}; [0, 1, 2].forEach(i => { if (pod[i]) podNames[i + 1] = pod[i].nickname || ''; });
       const pods = {};
       const block = (p, place) => {
         const delay = delayBase + POD_DELAY[place];
@@ -1575,7 +1589,7 @@
         KQ.btn('같은 퀴즈로 다시', () => KQ.go(quizId ? '/teacher/host/' + encodeURIComponent(quizId) : '/teacher'), 'lv-white-btn'),
         KQ.btn('게임 닫기', closeGame, 'danger')));
       const node = el('div', { class: 'lv-fin' }, parts);
-      return { node, pods, banner, bannerWin, teamWin, delayBase };
+      return { node, pods, banner, bannerWin, teamWin, delayBase, podNames, awards, awardNodes: [...node.querySelectorAll('.lv-award')] };
     }
 
     function onGone(status) {
