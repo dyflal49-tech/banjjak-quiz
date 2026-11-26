@@ -1171,6 +1171,8 @@
     function apply(v) {
       if (ended) return;
       view = v;
+      shell.dataset.phase = v.phase || "";
+      shell.dataset.mode = v.mode || "";
       if (!m || mId !== v.mode) { if (m && stageUsed) { modeCall(m, 'dispose', stage); stage.replaceChildren(); } m = modeMeta(v.mode); mId = v.mode; }
       updateChrome(v);
       const s = [v.mode, v.teamsEnabled ? 1 : 0, v.phase, v.question ? v.question.id : '', v.questionIndex ?? ''].join('|');

@@ -644,3 +644,105 @@
 .lv-host.lv-has-miniqr .lv-hmain{padding-right:172px}
 .lv-miniqr{top:auto}
 @media (max-width:900px){.lv-host.lv-has-miniqr .lv-hmain{padding-right:136px}}
+
+
+/* v10: 학생·진행자 모든 뷰포트에서 질문/보기/게임을 한 화면에 고정 */
+.lv-player[data-phase="question"],.lv-player[data-phase="reveal"]{box-sizing:border-box;width:100%;height:100vh;height:100dvh;min-height:0;overflow:hidden;overscroll-behavior:none}
+.lv-player[data-phase="question"] .lv-pbar,.lv-player[data-phase="reveal"] .lv-pbar{position:relative;top:auto;flex:0 0 auto}
+.lv-player[data-phase="question"] .lv-pmain,.lv-player[data-phase="reveal"] .lv-pmain{flex:1 1 0;min-height:0;overflow:hidden}
+.lv-player[data-phase="question"] .lv-mode-panel,.lv-player[data-phase="reveal"] .lv-mode-panel{box-sizing:border-box;flex:0 0 auto;max-height:clamp(72px,17dvh,140px);min-height:0;overflow:hidden;display:flex;align-items:center;justify-content:center;padding:0 8px 4px}
+.lv-player[data-phase="question"] .lv-mode-panel>* ,.lv-player[data-phase="reveal"] .lv-mode-panel>*{box-sizing:border-box;max-height:100%;max-width:100%}
+.lv-player[data-phase="question"] .md-player,.lv-player[data-phase="reveal"] .md-player{width:100%;max-width:560px;max-height:100%;gap:4px;font-size:clamp(12px,1.8dvh,16px)}
+.lv-player[data-phase="question"] .md-card,.lv-player[data-phase="reveal"] .md-card{padding:clamp(4px,1dvh,9px);gap:4px;border-top-width:4px}
+.lv-player[data-phase="question"] .lv-q{box-sizing:border-box;width:100%;max-width:none;height:100%;min-height:0;flex:1 1 0;overflow:hidden;gap:clamp(4px,1dvh,10px);padding:clamp(5px,1dvh,10px)}
+.lv-player[data-phase="question"] .lv-q-text{flex:0 0 auto;font-size:clamp(15px,min(3.3dvh,4.1vw),24px);line-height:1.16;padding:clamp(7px,1.2dvh,12px);max-width:100%}
+.lv-player[data-phase="question"] .lv-q-img{flex:0 1 auto;min-height:0;display:flex;align-items:center;justify-content:center;margin:0}
+.lv-player[data-phase="question"] .lv-q-img img{display:block;max-width:100%;max-height:clamp(60px,15dvh,150px);width:auto;height:auto;object-fit:contain}
+.lv-player[data-phase="question"] .lv-choices{flex:1 1 0;min-height:0;grid-template-rows:repeat(2,minmax(44px,1fr));gap:clamp(5px,1dvh,9px)}
+.lv-player[data-phase="question"] .lv-choices-2{grid-template-rows:minmax(44px,1fr)}
+.lv-player[data-phase="question"] .lv-choice{box-sizing:border-box;min-height:44px;height:100%;padding:clamp(4px,1dvh,10px) clamp(6px,1vw,12px);gap:clamp(4px,1vw,10px);font-size:clamp(13px,min(2.8dvh,2.6vw),21px);line-height:1.14;overflow:hidden}
+.lv-player[data-phase="question"] .lv-choice-text{min-width:0;white-space:normal;overflow-wrap:anywhere}
+.lv-player[data-phase="question"] .lv-type-form{flex-direction:row;align-items:stretch;gap:8px;max-width:none;margin:0 auto}
+.lv-player[data-phase="question"] .lv-type-form input{flex:1;min-width:0}
+.lv-player[data-phase="question"] .lv-slider{padding:clamp(6px,1dvh,12px);gap:5px}
+.lv-player[data-phase="question"] .lv-puzzle{width:100%;gap:4px;min-height:0}
+.lv-player[data-phase="question"] .lv-pz-item{min-height:38px;padding:3px 6px;gap:5px}
+.lv-player[data-phase="question"] .lv-pz-btns{flex-direction:row}
+.lv-player[data-phase="question"] .lv-pz-btn{min-height:32px;padding:2px 6px}
+.lv-player[data-phase="question"] .ar-o-strip,.lv-player[data-phase="question"] .ar-chase-strip,.lv-player[data-phase="question"] .ar-mb-pstrip,.lv-player[data-phase="question"] .ar-tower-strip{max-height:100%;min-height:0;box-sizing:border-box}
+.lv-player.lv-bg-runner{box-sizing:border-box;width:100%;height:100vh;height:100dvh;min-height:0;overflow:hidden;overscroll-behavior:none}
+.lv-player.lv-bg-runner .lv-pbar{position:relative;top:auto;flex:0 0 auto}
+.lv-player.lv-bg-runner .lv-mode-panel{box-sizing:border-box;flex:1 1 0;min-height:0;height:auto;max-height:none;margin:0;padding:0;overflow:hidden;display:flex}
+.lv-player.lv-bg-runner .lv-mode-panel>.ar-runner-p{height:100%;min-height:0;flex:1 1 0}
+.lv-player.lv-bg-runner .ar-runner-stage{height:100%;min-height:0;max-height:100%;flex:1 1 0}
+.lv-host{box-sizing:border-box;height:100vh;height:100dvh;min-height:0;overflow:hidden}
+.lv-hmain{min-height:0;overflow:hidden}
+.lv-hq.with-stage{min-height:0;grid-template-columns:minmax(0,1fr) minmax(220px,30%)}
+.lv-hq-main{min-height:0;overflow:hidden}
+.lv-hq-mid{min-height:0;overflow:hidden}
+.lv-stage-slot.side{min-height:0;height:100%}
+.lv-hq-bottom{min-height:0;overflow:hidden}
+.lv-htiles{min-height:0;grid-template-rows:repeat(2,minmax(48px,1fr));overflow:hidden}
+.lv-htile{min-height:48px;padding:clamp(5px,1dvh,12px);font-size:clamp(14px,min(2.8dvh,2vw),27px);line-height:1.15;overflow:hidden}
+@media(max-width:900px) and (orientation:landscape){
+ .lv-host{height:100vh;height:100dvh;min-height:0;overflow:hidden}
+ .lv-hmain{overflow:hidden}
+ .lv-hq.with-stage,.lv-rv.with-stage .lv-rv-grid,.lv-run-grid{grid-template-columns:minmax(0,1fr) minmax(190px,34%);grid-template-rows:minmax(0,1fr);min-height:0}
+ .lv-stage-slot.side{min-height:0;height:100%}
+ .lv-hq{gap:7px;padding:7px 9px}
+ .lv-hq-main{gap:6px}
+ .lv-q-band{padding:6px 10px}
+ .lv-q-band-text{font-size:clamp(18px,3.8vh,30px)}
+ .lv-hq-mid{gap:7px}
+ .lv-timer{width:min(12vh,100px);height:min(12vh,100px)}
+ .lv-htile{min-height:44px}
+ .lv-hq-center{display:flex!important}
+ .lv-hq-img{max-height:20dvh}
+}
+@media(max-width:900px) and (orientation:portrait){
+ .lv-host{height:100vh;height:100dvh;min-height:0;overflow:hidden}
+ .lv-hmain{overflow:hidden}
+ .lv-hq.with-stage,.lv-rv.with-stage .lv-rv-grid,.lv-run-grid{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr) minmax(110px,22dvh);min-height:0}
+ .lv-hq{gap:5px;padding:5px 7px}
+ .lv-hq-main{gap:5px}
+ .lv-stage-slot.side{min-height:0;height:100%}
+ .lv-hq-mid{grid-template-columns:auto minmax(0,1fr) auto;gap:5px}
+ .lv-hq-center{display:flex!important}
+ .lv-hq-img{max-height:12dvh}
+ .lv-answered{min-width:64px;padding:4px 6px}
+ .lv-answered-num{font-size:1.7em}
+ .lv-timer{width:min(10dvh,76px);height:min(10dvh,76px)}
+ .lv-hq-bottom{gap:4px}
+ .lv-htiles{gap:4px;grid-template-rows:repeat(2,minmax(42px,1fr))}
+ .lv-htile{min-height:42px;font-size:clamp(13px,2dvh,21px);padding:4px 6px}
+ .lv-hq-guide{font-size:1em;padding:6px}
+}
+@media(max-width:600px) and (orientation:portrait){
+ .lv-hq-mid{grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);grid-template-rows:minmax(0,1fr) auto}
+ .lv-hq-side{grid-column:1/-1;grid-row:2;flex-direction:row;justify-content:center;gap:6px}
+ .lv-hq-center{grid-column:2;grid-row:1;min-width:0}
+ .lv-hq-img{max-height:13dvh;max-width:100%}
+ .lv-answered{min-width:0}
+}
+@media(max-height:680px){
+ .lv-player[data-phase="question"] .lv-mode-panel,.lv-player[data-phase="reveal"] .lv-mode-panel{max-height:15dvh}
+ .lv-player[data-phase="question"] .lv-q{gap:4px;padding:4px 7px}
+ .lv-player[data-phase="question"] .lv-q-img img{max-height:12dvh}
+ .lv-player[data-phase="question"] .lv-choice{min-height:42px;padding:3px 6px}
+ .lv-player[data-phase="question"] .lv-pbar-time{width:36px;height:36px;min-width:36px;font-size:1rem}
+}
+@media(max-width:520px){
+ .lv-player[data-phase="question"] .lv-choice{font-size:clamp(13px,2.2dvh,17px)}
+ .lv-player[data-phase="question"] .lv-q-text{font-size:clamp(15px,2.65dvh,20px)}
+}
+
+
+/* v10 보정: 작은 가로 화면에서도 게임 상태 카드 내부까지 표시 */
+.lv-player[data-phase="question"] .lv-mode-panel,.lv-player[data-phase="reveal"] .lv-mode-panel{max-height:clamp(76px,20dvh,150px)}
+.lv-player[data-phase="question"] .ar-o-strip{min-height:64px;max-height:100%;padding:5px 9px;gap:8px}
+.lv-player[data-phase="question"] .ar-o-gpicon{width:34px}
+.lv-player[data-phase="question"] .ar-o-gpline,.lv-player[data-phase="question"] .ar-o-bpline{font-size:clamp(11px,1.9dvh,14px)}
+.lv-player[data-phase="question"] .ar-o-gpmine,.lv-player[data-phase="question"] .ar-o-gpme,.lv-player[data-phase="question"] .ar-o-bpsh,.lv-player[data-phase="question"] .ar-o-bpme{font-size:clamp(10px,1.7dvh,12px)}
+.lv-player[data-phase="question"] .ar-o-gpnum{font-size:clamp(17px,3dvh,22px)}
+.lv-player[data-phase="question"] .ar-o-bpface{width:42px;height:42px}
+@media(max-height:680px){.lv-player[data-phase="question"] .lv-mode-panel,.lv-player[data-phase="reveal"] .lv-mode-panel{max-height:20dvh}}
