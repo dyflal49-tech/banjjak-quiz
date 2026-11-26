@@ -977,7 +977,21 @@
     const footCount = el('span', {}, '');
     const footConn = el('span', { class: 'lv-conn' }, '연결 중…');
     const foot = el('footer', { class: 'lv-hfoot' }, footPin, footCount, el('span', { class: 'spacer' }), footConn);
-    const shell = el('div', { class: 'lv-host purple-bg' }, top, main, foot, live);
+    // 게임 중에도 늘 보이는 작은 QR (튕긴 학생이 다시 들어오도록). 누르면 크게, 접기 가능
+    const miniQrBody = el('div', { class: 'lv-miniqr-body' });
+    const miniQrPin = el('strong', { class: 'lv-miniqr-pin' }, fmtPin(pin));
+    const miniQrFold = el('button', { type: 'button', class: 'lv-miniqr-fold', 'aria-label': 'QR 접기' }, '접기');
+    const miniQr = el('aside', { class: 'lv-miniqr', 'aria-label': '다시 들어오기 QR 코드', hidden: true },
+      el('button', { type: 'button', class: 'lv-miniqr-open', 'aria-label': 'QR 코드 크게 보기', onClick: () => openQr() }, miniQrBody),
+      el('div', { class: 'lv-miniqr-txt' }, el('span', {}, '튕겼다면 다시 들어와요'), el('span', {}, 'PIN ', miniQrPin)), miniQrFold);
+    miniQrFold.addEventListener('click', () => { const f = miniQr.classList.toggle('folded'); shell.classList.toggle('lv-has-miniqr', !f && !miniQr.hidden); miniQrFold.textContent = f ? 'QR' : '접기'; miniQrFold.setAttribute('aria-label', f ? 'QR 펼치기' : 'QR 접기'); });
+    let miniQrMade = false;
+    function syncMiniQr(v) {
+      const show = !!v && v.phase !== 'lobby' && v.phase !== 'finished';
+      miniQr.hidden = !show; shell.classList.toggle('lv-has-miniqr', show && !miniQr.classList.contains('folded'));
+      if (show && !miniQrMade) { miniQrMade = true; miniQrBody.replaceChildren(qrNode(joinUrlOf(v, pin), 132)); }
+    }
+    const shell = el('div', { class: 'lv-host purple-bg' }, top, main, foot, live, miniQr);
     KQ.render(shell);
     main.append(el('div', { class: 'lv-center-msg' }, el('div', { class: 'lv-spinner', 'aria-hidden': 'true' }), el('h1', {}, '게임을 불러오는 중…')));
 
@@ -1140,6 +1154,7 @@
       qrBtn.hidden = v.phase === 'finished';
       if (v.phase === 'finished' && settingsUI) KQ.closeModal(true);
       shell.dataset.phase = v.phase;
+      syncMiniQr(v);
       // 새 참가자 소리
       const ids = new Set((v.players || []).map(p => p.id));
       if (prevIds) { let fresh = 0; for (const id of ids) if (!prevIds.has(id)) fresh++; if (fresh) { snd('join'); if (v.phase !== 'lobby') announce(live, `새 참가자 ${fresh}명`); } }

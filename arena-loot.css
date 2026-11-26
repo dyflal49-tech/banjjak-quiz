@@ -1,0 +1,50 @@
+/* 보스 레이드 보물 창고 */
+.ar-loot{position:relative;color:#fff;font-family:inherit}
+.ar-loot-big{height:100%;min-height:300px;display:flex;flex-direction:column;border-radius:16px;overflow:hidden;padding:14px 16px;background:radial-gradient(ellipse at 30% 60%,#7a4a00 0,#3b2205 45%,#160b02 100%)}
+.ar-loot-head{text-align:center}
+.ar-loot-head h2{margin:0;font-size:clamp(24px,3.4vw,40px);color:#ffd43b;text-shadow:0 4px 0 #7a4a00,0 0 24px rgba(255,212,59,.6);animation:ar-loot-title 1.6s ease-in-out infinite alternate}
+.ar-loot-head p{margin:4px 0 0;font-size:clamp(13px,1.5vw,17px);opacity:.92}
+.ar-loot-body{flex:1;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:14px;margin-top:10px;min-height:0}
+.ar-loot-left{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;min-height:0}
+.ar-loot-chestwrap{position:relative;width:min(100%,280px);aspect-ratio:200/150}
+.ar-loot-chest{position:relative;width:100%;height:100%;z-index:1;overflow:visible}
+.ar-loot-lid{transform-origin:100px 70px;transform:rotate(-18deg) translate(-6px,-14px)}
+.ar-loot-chestwrap.pop .ar-loot-chest{animation:ar-loot-bounce .55s cubic-bezier(.3,1.7,.5,1)}
+.ar-loot-chestwrap.pop .ar-loot-lid{animation:ar-loot-lid .55s ease-out}
+.ar-loot-rays{position:absolute;left:50%;top:45%;width:240%;aspect-ratio:1;transform:translate(-50%,-50%);background:repeating-conic-gradient(rgba(255,224,102,.28) 0 10deg,transparent 10deg 24deg);border-radius:50%;-webkit-mask:radial-gradient(circle,#000 25%,transparent 68%);mask:radial-gradient(circle,#000 25%,transparent 68%);animation:ar-loot-spin 14s linear infinite;pointer-events:none}
+.ar-loot-totbox{display:flex;align-items:baseline;gap:6px;background:rgba(0,0,0,.35);border:2px solid #ffd43b;border-radius:999px;padding:6px 16px;font-size:15px}
+.ar-loot-total{font-size:clamp(24px,3vw,36px);color:#ffd43b}
+.ar-loot-guide{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;font-size:12.5px;opacity:.95}
+.ar-loot-guide li{display:flex;align-items:center;gap:4px}
+.ar-loot-right{background:rgba(0,0,0,.3);border-radius:14px;padding:10px 12px;min-height:0;overflow:hidden}
+.ar-loot-right h3{margin:0 0 8px;font-size:16px;color:#ffe066}
+.ar-loot-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.ar-loot-row{display:flex;align-items:center;gap:8px;background:linear-gradient(90deg,rgba(255,212,59,.18),rgba(255,255,255,.06));border-radius:12px;padding:5px 10px}
+.ar-loot-row.fresh{animation:ar-loot-in .5s cubic-bezier(.3,1.6,.5,1) both}
+.ar-loot-row.t3,.ar-loot-row.t4{background:linear-gradient(90deg,rgba(255,212,59,.5),rgba(250,176,5,.2));box-shadow:0 0 14px rgba(255,212,59,.45)}
+.ar-loot-name{font-weight:900;font-size:16px;max-width:7em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ar-loot-item{flex:1;min-width:0;font-size:13.5px;opacity:.95;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ar-loot-val{color:#ffd43b;font-size:18px}
+.ar-loot-empty{opacity:.8;font-size:14px;padding:8px}
+.ar-loot-av{flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;overflow:hidden;background:#fff;color:#3b1d72;font-weight:900}
+.ar-loot-av svg{width:100%;height:100%}
+.ar-loot-ico{flex:0 0 auto;filter:drop-shadow(0 2px 3px rgba(0,0,0,.4))}
+.ar-loot-ico.t4{filter:drop-shadow(0 0 6px #ffd43b)}
+.ar-loot-fly{position:absolute;left:50%;top:40%;z-index:3;display:flex;flex-direction:column;align-items:center;gap:2px;font-weight:900;font-size:13px;text-shadow:0 2px 4px #000;animation:ar-loot-fly 1.4s cubic-bezier(.2,.8,.4,1) forwards;pointer-events:none}
+.ar-loot-small{display:flex;align-items:center;gap:12px;height:100%;padding:8px 14px;border-radius:14px;background:linear-gradient(90deg,#5c3600,#2b1a05);font-size:14px}
+.ar-loot-small strong{display:block;color:#ffd43b;font-size:16px}
+.ar-loot-small .ar-loot-total{font-size:18px}
+.ar-loot-player{display:flex;align-items:center;gap:12px;background:linear-gradient(90deg,#7a4a00,#3b2205);border:2px solid #ffd43b;border-radius:16px;padding:10px 14px;box-shadow:0 3px 0 rgba(0,0,0,.25)}
+.ar-loot-player.pop{animation:ar-loot-bounce .55s cubic-bezier(.3,1.7,.5,1)}
+.ar-loot-ptext{display:flex;flex-direction:column;gap:2px;min-width:0}
+.ar-loot-ptext strong{color:#ffd43b;font-size:16px}
+.ar-loot-ptext b{color:#ffd43b;font-size:18px}
+.ar-loot-pmsg{font-size:13px;opacity:.95}
+@keyframes ar-loot-spin{to{transform:translate(-50%,-50%) rotate(360deg)}}
+@keyframes ar-loot-title{from{transform:scale(1)}to{transform:scale(1.05)}}
+@keyframes ar-loot-bounce{0%{transform:scale(.85)}60%{transform:scale(1.12)}100%{transform:scale(1)}}
+@keyframes ar-loot-lid{0%{transform:rotate(-18deg) translate(-6px,-14px)}40%{transform:rotate(-40deg) translate(-20px,-40px)}100%{transform:rotate(-18deg) translate(-6px,-14px)}}
+@keyframes ar-loot-in{from{opacity:0;transform:translateX(30px) scale(.9)}to{opacity:1;transform:none}}
+@keyframes ar-loot-fly{0%{opacity:0;transform:translate(-50%,0) scale(.4)}20%{opacity:1}100%{opacity:0;transform:translate(calc(-50% + var(--dx,0px)),-170px) scale(1.15)}}
+@media (max-width:700px){.ar-loot-body{grid-template-columns:1fr}.ar-loot-guide{display:none}}
+@media (prefers-reduced-motion: reduce){.ar-loot-rays,.ar-loot-head h2,.ar-loot-row.fresh,.ar-loot-chestwrap.pop .ar-loot-chest,.ar-loot-chestwrap.pop .ar-loot-lid,.ar-loot-player.pop{animation:none}}

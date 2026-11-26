@@ -67,7 +67,7 @@
   const KEY_ROWS = [['← →', 'A D', '줄 바꾸기'], ['↑', '스페이스', '점프'], ['↓', 'S', '숙이기']];
 
   // ---------- 맵(테마): 달린 거리 MAP_LEN m 마다 다음 맵, 6개 순환. 진행자 화면도 같은 표로 계산 ----------
-  const MAP_LEN = 450;
+  let MAP_LEN = 450; let ORDER = [0, 1, 2, 3, 4, 5]; let cfgKey = '';
   const MAPS = [
     { id: 'meadow', name: '초원', title: '반짝 초원', desc: '점프대를 밟으면 하늘 높이 날아올라 코인을 모아요!', sky: ['#4dabf7', '#d0ebff'], hill: '#69db7c', ground: ['#8ce99a', '#2f9e44'], track: ['#f08c4a', '#e8773a'], curb: ['#ffffff', '#e03131'], line: 'rgba(255,255,255,.75)', chip: '#2f9e44' },
     { id: 'volcano', name: '화산', title: '부글부글 화산 지대!', desc: '하늘에서 용암 돌이 떨어져요. 그림자를 보고 옆으로! 용암 웅덩이는 점프!', sky: ['#1a0505', '#d9480f'], hill: '#3b1f1a', ground: ['#5c2d1f', '#1f0d08'], track: ['#4a3029', '#3d2620'], curb: ['#ff6b00', '#2b1a14'], line: 'rgba(255,140,60,.55)', chip: '#e8590c', boss: { name: '용암 골렘', body: '#5c3d2e', glow: '#ff6b00', eye: '#ffd43b' } },
@@ -77,7 +77,23 @@
     { id: 'space', name: '우주', title: '두근두근 우주 지대!', desc: '중력이 약해서 점프가 높고 길어요. 떨어지는 운석의 그림자를 피해요!', sky: ['#05010f', '#3b1f7a'], hill: '#4c2a99', ground: ['#1b1035', '#08040f'], track: ['#3b2a80', '#2d1f66'], curb: ['#22d3ee', '#a855f7'], line: 'rgba(34,211,238,.6)', chip: '#7048e8', boss: { name: '외계 문어왕', body: '#9c36b5', glow: '#22d3ee', eye: '#ffffff' } }
   ];
   const mapIdxAt = d => Math.max(0, Math.floor(N(d) / MAP_LEN));
-  const mapAt = d => MAPS[mapIdxAt(d) % MAPS.length];
+  const mapByIdx = i => MAPS[ORDER[((i % ORDER.length) + ORDER.length) % ORDER.length]] || MAPS[0];
+  const mapAt = d => mapByIdx(mapIdxAt(d));
+  // 게임마다 맵 순서를 섞음: 보스 없는 맵은 1·3·5번째, 보스 맵은 2·4·6번째
+  function orderFor(seed) {
+    let a = (Number(seed) >>> 0) || 1; const rnd = () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+    const mix = arr => { for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [arr[i], arr[j]] = [arr[j], arr[i]]; } return arr; };
+    const nb = mix(MAPS.map((m, i) => (m.boss ? -1 : i)).filter(i => i >= 0)), bs = mix(MAPS.map((m, i) => (m.boss ? i : -1)).filter(i => i >= 0));
+    const out = []; for (let k = 0; k < Math.max(nb.length, bs.length); k++) { if (k < nb.length) out.push(nb[k]); if (k < bs.length) out.push(bs[k]); }
+    return out;
+  }
+  function applyCfg(view) {
+    const s = (view && view.modeState) || {}; const key = (s.mapLen || '') + '|' + (s.mapSeed || '');
+    if (key === cfgKey) return; cfgKey = key;
+    if (Number(s.mapLen) >= 100) MAP_LEN = Number(s.mapLen);
+    if (s.mapSeed) ORDER = orderFor(s.mapSeed);
+    if (KQ.arena && KQ.arena.runnerMaps) { KQ.arena.runnerMaps.MAP_LEN = MAP_LEN; KQ.arena.runnerMaps.order = ORDER.slice(); }
+  }
   const TABLES = {
     meadow: [['coins', 0.2], ['hurdle', 0.36], ['bar', 0.5], ['block', 0.64], ['spring', 0.78], ['barrel', 0.86], ['power', 0.93], ['skycoins', 1]],
     volcano: [['coins', 0.16], ['rock', 0.42], ['lava', 0.6], ['bar', 0.7], ['block', 0.8], ['power', 0.87], ['hurdle', 1]],
@@ -97,6 +113,7 @@
   }
 
   function player(root, view, send) {
+    applyCfg(view);
     const phase = view && view.phase;
     if (phase === 'running') return playerRun(root, view, send);
     if (phase === 'finished') return playerSummary(root, view);
@@ -106,7 +123,7 @@
   function playerIdle(root, view) {
     prep(root, 'runner-idle', ['ar-runner-pidle'], (st, r) => {
       r.append(H('div', { class: 'ar-runner-idlecard' },
-        H('div', { class: 'ar-runner-idle-left' }, H('strong', {}, '퀴즈 런 조작법'), H('span', {}, '장애물을 피해 달리다가 정답 문으로 골인! 450m마다 새로운 맵, 보스도 나타나요!')),
+        H('div', { class: 'ar-runner-idle-left' }, H('strong', {}, '퀴즈 런 조작법'), H('span', {}, `장애물을 피해 달리다가 정답 문으로 골인! ${MAP_LEN}m마다 새로운 맵, 2·4·6번째 맵에는 보스도 나타나요!`)),
         H('div', { class: 'ar-runner-idle-keys' }, KEY_ROWS.map(([a, b, t]) => H('span', { class: 'ar-runner-ik' }, H('kbd', {}, a), H('kbd', { class: 'alt' }, b), t)))));
     });
   }
@@ -315,11 +332,11 @@
     clearTimeout(st.mapBanT); st.mapBanT = setTimeout(() => { if (!st.dead) st.mapBan.classList.remove('show'); }, 2800);
   }
   function mapTick(st, t, dt) {
-    const d = st.pz + (st.d0 || 0); const mi = mapIdxAt(d); const M = MAPS[mi % MAPS.length];
+    const d = st.pz + (st.d0 || 0); const mi = mapIdxAt(d); const M = mapByIdx(mi);
     if (st.mapIdx === null) { st.mapIdx = mi; st.mapEnterD = d - (d % MAP_LEN); if (mi > 0) showMap(st, M); if (M.boss) startBoss(st, M, t); }
     else if (mi !== st.mapIdx) {
       const old = st.boss && !st.boss.dead && !st.boss.leaving ? st.boss : null;
-      st.prevMap = MAPS[st.mapIdx % MAPS.length]; st.mapIdx = mi; st.mapEnterD = mi * MAP_LEN;
+      st.prevMap = mapByIdx(st.mapIdx); st.mapIdx = mi; st.mapEnterD = mi * MAP_LEN;
       if (old) { old.leaving = t; showBanner(st, `${old.name}이 도망갔어요! 다음 보스는 꼭 잡아요`, 'bad'); }
       showMap(st, M); snd('levelup'); fx('flash', M.chip, 220);
       if (M.boss) startBoss(st, M, t);
@@ -338,7 +355,7 @@
   }
   function startBoss(st, M, t) {
     st.bossCount++;
-    const max = Math.min(8, 3 + st.bossCount);
+    const max = Math.min(14, Math.round(Math.min(8, 3 + st.bossCount) * Math.max(1, MAP_LEN / 450)));
     st.boss = { name: M.boss.name, look: M.id, theme: M.boss, hp: max, max, t0: t, nextThrow: t + 4500, hitUntil: 0, laughUntil: 0, dead: false, deadAt: 0, leaving: 0 };
     setTimeout(() => { if (!st.dead && st.boss && st.boss.name === M.boss.name) { showBanner(st, `보스 등장! ${M.boss.name}. 정답을 맞혀 공격해요!`, 'red'); snd('boom'); } }, 2700);
   }
@@ -554,7 +571,7 @@
     const gate = st.gate && !st.gate.passedFar ? st.gate : null;
     const items = list.map(o => ({ z: o.z, o }));
     if (gate) items.push({ z: gate.z, gate });
-    if (st.mapIdx !== null) { const B = (st.mapIdx + 1) * MAP_LEN - (st.d0 || 0); if (B - st.pz < VIEW_D && B - st.pz > -CAM_BACK + 0.8) items.push({ z: B, portal: MAPS[(st.mapIdx + 1) % MAPS.length] }); }
+    if (st.mapIdx !== null) { const B = (st.mapIdx + 1) * MAP_LEN - (st.d0 || 0); if (B - st.pz < VIEW_D && B - st.pz > -CAM_BACK + 0.8) items.push({ z: B, portal: mapByIdx(st.mapIdx + 1) }); }
     items.sort((a, b) => b.z - a.z);
     for (const it of items) {
       if (!playerDrawn && it.z < st.pz) { drawPlayer(st, c, t); playerDrawn = true; }
@@ -937,6 +954,7 @@
   // 진행자 화면: 실시간 경주판
   // ======================================================================
   function host(root, view) {
+    applyCfg(view);
     const s = (view && view.modeState) || {};
     const players = Array.isArray(s.players) ? s.players : [];
     const st = prep(root, 'runner-host', ['ar-runner-h'], (st, r) => {

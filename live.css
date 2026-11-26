@@ -630,3 +630,17 @@
 .lv-callout .lv-av.lv-callout-av{border:6px solid #ffd43b;border-radius:50%;box-shadow:0 0 0 6px rgba(255,255,255,.35),0 14px 40px rgba(0,0,0,.45);background:#fff}
 .lv-callout.award{top:46%}
 @media (prefers-reduced-motion: reduce){.lv-award.lv-award-show{animation:none;opacity:1}}
+
+/* v8: 게임 중 상시 QR */
+.lv-miniqr{position:fixed;right:14px;bottom:44px;z-index:60;display:flex;flex-direction:column;align-items:center;gap:4px;background:#fff;color:#2b1257;border-radius:14px;padding:8px 8px 6px;box-shadow:0 6px 20px rgba(0,0,0,.35);border:3px solid #ffd43b;width:150px}
+.lv-miniqr-open{border:0;background:none;padding:0;cursor:zoom-in;line-height:0}
+.lv-miniqr-open img,.lv-miniqr-open canvas{width:132px;height:132px;display:block}
+.lv-miniqr-txt{display:flex;flex-direction:column;align-items:center;font-size:12px;font-weight:800;line-height:1.25;text-align:center}
+.lv-miniqr-pin{font-size:18px;letter-spacing:.04em}
+.lv-miniqr-fold{position:absolute;top:-12px;left:-12px;border:0;border-radius:999px;background:#3b1d72;color:#fff;font:800 11px/1 inherit;padding:5px 8px;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.3)}
+.lv-miniqr.folded{width:auto;padding:6px 10px}
+.lv-miniqr.folded .lv-miniqr-open,.lv-miniqr.folded .lv-miniqr-txt span:first-child{display:none}
+@media (max-width:900px){.lv-miniqr{width:118px}.lv-miniqr-open img,.lv-miniqr-open canvas{width:100px;height:100px}}
+.lv-host.lv-has-miniqr .lv-hmain{padding-right:172px}
+.lv-miniqr{top:auto}
+@media (max-width:900px){.lv-host.lv-has-miniqr .lv-hmain{padding-right:136px}}
