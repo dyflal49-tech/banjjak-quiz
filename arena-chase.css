@@ -167,3 +167,16 @@
 .ar-chase-pstage.hot{color:#fff;background:#845ef7;border-radius:8px;padding:1px 6px}
 @keyframes ar-chase-stagepulse{to{transform:scale(1.25)}}
 @media (prefers-reduced-motion:reduce){.ar-chase-stage-dots i.on{animation:none}}
+
+
+/* v9 추격 로봇 진화와 심해 괴수 */
+.ar-chase-chaser{filter:drop-shadow(0 0 15px rgba(255,65,45,.55))}
+.ar-chase-robot .ar-chase-chaser-body[data-stage="6"]{filter:drop-shadow(0 0 18px #ff2020)}
+.ar-chase-core{filter:drop-shadow(0 0 9px #ff6b00);animation:ar-chase-corepulse .65s ease-in-out infinite alternate}
+.ar-chase-evolve{animation:ar-chase-evolve .65s cubic-bezier(.2,1.5,.5,1)}
+.ar-chase-thruster{filter:drop-shadow(0 0 8px #ff922b);animation:ar-chase-thrust .3s ease-in-out infinite alternate}
+.ar-chase-danger .ar-chase-chaser{filter:drop-shadow(0 0 22px #ff2020)}
+@keyframes ar-chase-corepulse{to{opacity:.65;filter:drop-shadow(0 0 16px #ff2020)}}
+@keyframes ar-chase-evolve{0%{opacity:.2;transform:scale(.7)}60%{opacity:1;transform:scale(1.12)}100%{transform:scale(1)}}
+@keyframes ar-chase-thrust{to{opacity:.5;transform:scaleY(.72)}}
+@media(prefers-reduced-motion:reduce){.ar-chase-core,.ar-chase-evolve,.ar-chase-thruster{animation:none}}

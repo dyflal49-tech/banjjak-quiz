@@ -12,8 +12,8 @@
   ];
   const HOLD_MS = 800, DANGER_MS = 8000;
   const THEME = {
-    robot: { chaser: '로봇', title: '로봇에게서 탈출하라!', tip: '정답 3개를 맞히면 부스트 1번', intro: '로봇이 우리 반을 쫓아와요!', escape: '탈출 성공!', caught: '로봇에게 잡혔어요!' },
-    sub: { chaser: '바다 괴물', title: '바다 괴물에게서 탈출하라!', tip: '에너지 3칸이 차면 큰 화면의 기호를 골라요', intro: '바다 괴물이 잠수함을 쫓아와요!', escape: '탈출 성공!', caught: '바다 괴물에게 잡혔어요!' }
+    robot: { chaser: '오메가 타이탄', title: '추격 로봇에게서 탈출하라!', tip: '정답 3개를 맞히면 부스트 1번', intro: '최종 병기 오메가 타이탄이 우리 반을 쫓아와요!', escape: '탈출 성공!', caught: '추격 로봇에게 잡혔어요!' },
+    sub: { chaser: '레비아탄', title: '심해의 지배자에게서 탈출하라!', tip: '에너지 3칸이 차면 큰 화면의 기호를 골라요', intro: '심해의 지배자 레비아탄이 잠수함을 쫓아와요!', escape: '탈출 성공!', caught: '레비아탄에게 따라잡혔어요!' }
   };
 
   // ---------- 작은 도우미 (KQ.modeKit 이 있으면 그것을 씀) ----------
@@ -99,12 +99,14 @@
   const place = (svg, x, y, w, h) => { svg.setAttribute('x', x); svg.setAttribute('y', y); svg.setAttribute('width', w); svg.setAttribute('height', h); return svg; };
 
   // 추격 로봇 (오른쪽을 봄, 0,0 = 왼쪽 위, 230x300)
-  function chaserRobot() {
+  function chaserRobot(stage = 1) {
     const g = S('g', { class: 'ar-chase-chaser-body' });
     const arm = S('g', { class: 'ar-chase-arm' },
       S('rect', { x: 140, y: 130, width: 78, height: 22, rx: 11, fill: '#5c5f6e', stroke: '#1c1d24', 'stroke-width': 4 }),
       S('path', { d: 'M214 118 l24 -8 l-6 22 l10 18 l-26 -4 z', fill: '#b0b3c4', stroke: '#1c1d24', 'stroke-width': 4, 'stroke-linejoin': 'round' }));
     g.append(
+      stage >= 3 ? S('path', { d: 'M34 122 L52 98 L72 122 L94 98 L116 122 L138 98 L166 122 L190 98 L194 154 L174 175 L50 175 L30 154 Z', fill: '#343a40', stroke: '#ffd43b', 'stroke-width': 4 }) : null,
+      stage >= 2 ? S('path', { d: 'M52 40 L38 4 L78 28 L110 0 L142 28 L182 4 L168 42', fill: '#495057', stroke: '#ff922b', 'stroke-width': 5, 'stroke-linejoin': 'round' }) : null,
       S('ellipse', { cx: 110, cy: 296, rx: 100, ry: 10, fill: 'rgba(0,0,0,.28)' }),
       S('rect', { x: 30, y: 236, width: 160, height: 52, rx: 26, fill: '#2d2f3a', stroke: '#111', 'stroke-width': 4 }),
       [56, 92, 128, 164].map(x => S('circle', { class: 'ar-chase-tread', cx: x, cy: 262, r: 15, fill: '#4a4d5c', stroke: '#9aa0b8', 'stroke-width': 3, 'stroke-dasharray': '6 5' })),
@@ -118,7 +120,11 @@
       S('path', { d: 'M90 58 L118 66 M132 66 L160 58', stroke: '#ff3b3b', 'stroke-width': 4, 'stroke-linecap': 'round' }),
       S('line', { x1: 116, y1: 30, x2: 116, y2: 6, stroke: '#1c1d24', 'stroke-width': 5 }),
       S('circle', { class: 'ar-chase-ant', cx: 116, cy: 6, r: 8, fill: '#ffd43b', stroke: '#1c1d24', 'stroke-width': 3 }),
-      arm);
+      arm,
+      stage >= 4 ? S('path', { d: 'M43 223 L18 272 L52 261 L72 281 M175 223 L202 272 L168 261 L148 281', fill: 'none', stroke: '#ff922b', 'stroke-width': 9, 'stroke-linecap': 'round', class: 'ar-chase-thruster' }) : null,
+      stage >= 5 ? S('path', { d: 'M25 145 L0 175 L27 178 M195 145 L220 175 L193 178', fill: 'none', stroke: '#adb5bd', 'stroke-width': 15, 'stroke-linecap': 'round' }) : null,
+      stage >= 6 ? S('path', { d: 'M83 134 L110 112 L137 134 L126 175 L94 175 Z', fill: '#ff2020', stroke: '#fff', 'stroke-width': 4, class: 'ar-chase-core' }) : null);
+    g.dataset.stage=String(stage);
     return g;
   }
   // 바다 괴물 (오른쪽을 봄, 300x220)
@@ -223,7 +229,7 @@
     st.timeVal = H('b', {}, '');
     st.boostVal = H('b', {}, '0');
     st.hud = H('div', { class: 'ar-chase-hud' },
-      H('div', { class: 'ar-chase-gap' }, H('span', { class: 'ar-chase-lbl' }, T.chaser + '와 거리'), st.gapVal, H('div', { class: 'ar-chase-meter' }, st.gapFill)),
+      H('div', { class: 'ar-chase-gap' }, st.gapLbl = H('span', { class: 'ar-chase-lbl' }, T.chaser + '와 거리'), st.gapVal, H('div', { class: 'ar-chase-meter' }, st.gapFill)),
       H('div', { class: 'ar-chase-title' }, H('b', {}, T.title), theme === 'robot' ? stageBlock(st) : H('span', {}, T.tip)),
       H('div', { class: 'ar-chase-stats' }, H('div', {}, H('span', {}, '탈출까지'), st.timeVal), H('div', {}, H('span', {}, '부스트'), st.boostVal)));
     root.append(st.hud);
@@ -409,7 +415,10 @@
     txt(st.stN, String(I.stage));
     st.stDots.forEach((d, i) => { cls(d, 'done', i < I.stage - 1 || (m.cleared && i < I.stages)); cls(d, 'on', i === I.stage - 1 && !m.cleared); });
     st.stFill.style.transform = `scaleX(${I.ratio.toFixed(3)})`;
-    txt(st.stTxt, m.cleared ? '모든 단계 클리어!' : `다음 미니게임까지 부스트 ${Math.min(I.sb, I.sg)} / ${I.sg}`);
+    const robotNames = ['정찰 로봇 스카우트','사냥 로봇 헌터','중장갑 로봇 탱커','강습 로봇 블레이드','거대 로봇 콜로서스','최종 병기 오메가 타이탄'];
+    txt(st.stTxt, m.cleared ? '모든 단계 클리어!' : `${robotNames[I.stage-1]} · 미니게임까지 부스트 ${Math.min(I.sb, I.sg)} / ${I.sg}`);
+    if (st.chaser && st.chaser.dataset.stage !== String(I.stage)) { st.chaser.replaceChildren(chaserRobot(I.stage)); st.chaser.dataset.stage=String(I.stage); replay(st.chaser,'ar-chase-evolve'); }
+    if (st.gapLbl) txt(st.gapLbl, robotNames[I.stage-1] + '와 거리');
     const lm = m.lastMini;
     st.stLast.hidden = !lm;
     if (lm) { txt(st.stLast, `지난 미션 ${lm.ok ? '성공' : '실패'}`); cls(st.stLast, 'good', !!lm.ok); cls(st.stLast, 'bad', !lm.ok); }

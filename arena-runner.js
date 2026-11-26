@@ -70,11 +70,11 @@
   let MAP_LEN = 450; let ORDER = [0, 1, 2, 3, 4, 5]; let cfgKey = '';
   const MAPS = [
     { id: 'meadow', name: '초원', title: '반짝 초원', desc: '점프대를 밟으면 하늘 높이 날아올라 코인을 모아요!', sky: ['#4dabf7', '#d0ebff'], hill: '#69db7c', ground: ['#8ce99a', '#2f9e44'], track: ['#f08c4a', '#e8773a'], curb: ['#ffffff', '#e03131'], line: 'rgba(255,255,255,.75)', chip: '#2f9e44' },
-    { id: 'volcano', name: '화산', title: '부글부글 화산 지대!', desc: '하늘에서 용암 돌이 떨어져요. 그림자를 보고 옆으로! 용암 웅덩이는 점프!', sky: ['#1a0505', '#d9480f'], hill: '#3b1f1a', ground: ['#5c2d1f', '#1f0d08'], track: ['#4a3029', '#3d2620'], curb: ['#ff6b00', '#2b1a14'], line: 'rgba(255,140,60,.55)', chip: '#e8590c', boss: { name: '용암 골렘', body: '#5c3d2e', glow: '#ff6b00', eye: '#ffd43b' } },
+    { id: 'volcano', name: '화산', title: '부글부글 화산 지대!', desc: '하늘에서 용암 돌이 떨어져요. 그림자를 보고 옆으로! 용암 웅덩이는 점프!', sky: ['#1a0505', '#d9480f'], hill: '#3b1f1a', ground: ['#5c2d1f', '#1f0d08'], track: ['#4a3029', '#3d2620'], curb: ['#ff6b00', '#2b1a14'], line: 'rgba(255,140,60,.55)', chip: '#e8590c', boss: { name: '용암 거인 마그마론', title: '화산의 재앙', body: '#5c3d2e', glow: '#ff6b00', eye: '#ffd43b' } },
     { id: 'glacier', name: '빙하', title: '꽁꽁 빙하 지대!', desc: '바닥이 미끄러워 줄을 바꾸면 쭉 미끄러져요. 펭귄은 점프로 넘어요!', sky: ['#1971c2', '#e7f5ff'], hill: '#f8f9fa', ground: ['#e7f5ff', '#a5d8ff'], track: ['#d0ebff', '#bfe0fb'], curb: ['#ffffff', '#4dabf7'], line: 'rgba(25,113,194,.45)', chip: '#1c7ed6' },
-    { id: 'jungle', name: '정글', title: '우거진 정글 지대!', desc: '통나무가 좌우로 흔들려요. 덩굴은 숙여서! 바나나 코인을 모아요!', sky: ['#2b8a3e', '#c0eb75'], hill: '#2f9e44', ground: ['#40c057', '#0b4d1a'], track: ['#8d6e63', '#7b5e52'], curb: ['#82c91e', '#3b5b0a'], line: 'rgba(255,255,255,.45)', chip: '#2b8a3e', boss: { name: '킹콩 대장', body: '#4e342e', glow: '#82c91e', eye: '#ff6b6b' } },
+    { id: 'jungle', name: '정글', title: '우거진 정글 지대!', desc: '통나무가 좌우로 흔들려요. 덩굴은 숙여서! 바나나 코인을 모아요!', sky: ['#2b8a3e', '#c0eb75'], hill: '#2f9e44', ground: ['#40c057', '#0b4d1a'], track: ['#8d6e63', '#7b5e52'], curb: ['#82c91e', '#3b5b0a'], line: 'rgba(255,255,255,.45)', chip: '#2b8a3e', boss: { name: '정글의 폭군 콩가', title: '잃어버린 사원의 수호자', body: '#4e342e', glow: '#82c91e', eye: '#ff6b6b' } },
     { id: 'desert', name: '사막', title: '뜨거운 사막 지대!', desc: '모래 폭풍이 불면 앞이 잘 안 보여요. 회전초와 선인장을 조심!', sky: ['#f08c00', '#fff3bf'], hill: '#e8b04b', ground: ['#f2c46d', '#c98b2b'], track: ['#e0a458', '#d4924a'], curb: ['#fff3bf', '#b7791f'], line: 'rgba(255,255,255,.6)', chip: '#e67700' },
-    { id: 'space', name: '우주', title: '두근두근 우주 지대!', desc: '중력이 약해서 점프가 높고 길어요. 떨어지는 운석의 그림자를 피해요!', sky: ['#05010f', '#3b1f7a'], hill: '#4c2a99', ground: ['#1b1035', '#08040f'], track: ['#3b2a80', '#2d1f66'], curb: ['#22d3ee', '#a855f7'], line: 'rgba(34,211,238,.6)', chip: '#7048e8', boss: { name: '외계 문어왕', body: '#9c36b5', glow: '#22d3ee', eye: '#ffffff' } }
+    { id: 'space', name: '우주', title: '두근두근 우주 지대!', desc: '중력이 약해서 점프가 높고 길어요. 떨어지는 운석의 그림자를 피해요!', sky: ['#05010f', '#3b1f7a'], hill: '#4c2a99', ground: ['#1b1035', '#08040f'], track: ['#3b2a80', '#2d1f66'], curb: ['#22d3ee', '#a855f7'], line: 'rgba(34,211,238,.6)', chip: '#7048e8', boss: { name: '은하 파괴자 제노크', title: '차원의 포식자', body: '#3b1f7a', glow: '#22d3ee', eye: '#ffffff' } }
   ];
   const mapIdxAt = d => Math.max(0, Math.floor(N(d) / MAP_LEN));
   const mapByIdx = i => MAPS[ORDER[((i % ORDER.length) + ORDER.length) % ORDER.length]] || MAPS[0];
@@ -356,8 +356,8 @@
   function startBoss(st, M, t) {
     st.bossCount++;
     const max = Math.min(14, Math.round(Math.min(8, 3 + st.bossCount) * Math.max(1, MAP_LEN / 450)));
-    st.boss = { name: M.boss.name, look: M.id, theme: M.boss, hp: max, max, t0: t, nextThrow: t + 4500, hitUntil: 0, laughUntil: 0, dead: false, deadAt: 0, leaving: 0 };
-    setTimeout(() => { if (!st.dead && st.boss && st.boss.name === M.boss.name) { showBanner(st, `보스 등장! ${M.boss.name}. 정답을 맞혀 공격해요!`, 'red'); snd('boom'); } }, 2700);
+    st.boss = { name: (st.bossCount > 3 ? '분노한 ' : '') + M.boss.name, look: M.id, theme: M.boss, enraged: st.bossCount > 3, hp: max, max, t0: t, nextThrow: t + 4500, hitUntil: 0, laughUntil: 0, dead: false, deadAt: 0, leaving: 0 };
+    setTimeout(() => { if (!st.dead && st.boss && st.boss.name === M.boss.name) { showBanner(st, `보스 출현 · ${M.boss.title || M.boss.name} — ${M.boss.name}`, 'red'); snd('boom'); } }, 2700);
   }
   function throwRock(st) {
     const b = st.boss; if (!b) return;
@@ -655,7 +655,7 @@
     ctx.fillStyle = M.chip; ctx.fillRect(l.x - 0.25 * s, l.y - H5, 0.5 * s, H5); ctx.fillRect(r.x - 0.25 * s, r.y - H5, 0.5 * s, H5);
     ctx.lineWidth = 0.6 * s; ctx.strokeStyle = M.chip; ctx.beginPath(); ctx.moveTo(l.x, l.y - H5); ctx.quadraticCurveTo((l.x + r.x) / 2, l.y - H5 - 1.6 * s, r.x, r.y - H5); ctx.stroke();
     const fs = clamp(0.62 * s, 10, 40); ctx.font = `900 ${fs}px system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(0,0,0,.6)';
-    const tx = `${M.name} 지대${M.boss ? ' · 보스 등장' : ''}`; ctx.strokeText(tx, (l.x + r.x) / 2, l.y - H5 - 0.5 * s); ctx.fillStyle = '#fff'; ctx.fillText(tx, (l.x + r.x) / 2, l.y - H5 - 0.5 * s);
+    const tx = `${M.name} 지대${M.boss ? ' · ' + M.boss.name : ''}`; ctx.strokeText(tx, (l.x + r.x) / 2, l.y - H5 - 0.5 * s); ctx.fillStyle = '#fff'; ctx.fillText(tx, (l.x + r.x) / 2, l.y - H5 - 0.5 * s);
     ctx.globalAlpha = 1;
   }
   function ambient(st, c, M, t) {
@@ -710,6 +710,12 @@
     ctx.fillStyle = '#1a1a1a'; ctx.beginPath(); const my = lk === 'space' ? H2 * 0.25 : H2 * 0.25;
     if (laugh) ctx.ellipse(0, my, W2 * 0.4, H2 * 0.22, 0, 0, 6.283); else ctx.ellipse(0, my, W2 * 0.32, H2 * 0.1, 0, 0, Math.PI);
     ctx.fill(); ctx.fillStyle = '#fff'; for (let i = -2; i <= 2; i++) { ctx.beginPath(); ctx.moveTo(i * W2 * 0.12 - W2 * 0.05, my); ctx.lineTo(i * W2 * 0.12, my + H2 * 0.08); ctx.lineTo(i * W2 * 0.12 + W2 * 0.05, my); ctx.fill(); }
+    // 맵 보스마다 알아보기 쉬운 실루엣과 발광 문양 추가
+    ctx.save(); ctx.lineJoin='round'; ctx.lineCap='round';
+    if (lk === 'volcano') { ctx.fillStyle='#3b1f1a'; ctx.strokeStyle='#ff6b00'; ctx.lineWidth=S*.035; ctx.beginPath(); ctx.moveTo(-W2*.65,-H2*.62);ctx.lineTo(-W2*.48,-H2*1.35);ctx.lineTo(-W2*.12,-H2*.76);ctx.lineTo(W2*.08,-H2*1.48);ctx.lineTo(W2*.28,-H2*.75);ctx.lineTo(W2*.58,-H2*1.25);ctx.lineTo(W2*.7,-H2*.55);ctx.closePath();ctx.fill();ctx.stroke();ctx.strokeStyle='#ffd43b';ctx.lineWidth=S*.028;ctx.beginPath();ctx.moveTo(-W2*.55,-H2*.25);ctx.lineTo(-W2*.18,H2*.35);ctx.lineTo(W2*.1,-H2*.05);ctx.lineTo(W2*.4,H2*.45);ctx.stroke(); }
+    else if (lk === 'jungle') { ctx.fillStyle='#8d6e63';ctx.strokeStyle='#ffd43b';ctx.lineWidth=S*.03;ctx.beginPath();ctx.moveTo(-W2*.8,-H2*.55);ctx.lineTo(-W2*.55,-H2*1.05);ctx.lineTo(-W2*.28,-H2*.62);ctx.lineTo(0,-H2*1.2);ctx.lineTo(W2*.25,-H2*.62);ctx.lineTo(W2*.6,-H2*1.05);ctx.lineTo(W2*.8,-H2*.5);ctx.closePath();ctx.fill();ctx.stroke();for(const sx of [-1,1]){ctx.beginPath();ctx.moveTo(sx*W2*.3,H2*.02);ctx.lineTo(sx*W2*.42,H2*.42);ctx.lineTo(sx*W2*.54,H2*.02);ctx.fillStyle='#fff3bf';ctx.fill();}ctx.strokeStyle='#82c91e';ctx.lineWidth=S*.025;ctx.beginPath();ctx.moveTo(-W2*.58,-H2*.4);ctx.lineTo(-W2*.36,H2*.35);ctx.lineTo(-W2*.12,-H2*.25);ctx.moveTo(W2*.58,-H2*.4);ctx.lineTo(W2*.36,H2*.35);ctx.lineTo(W2*.12,-H2*.25);ctx.stroke(); }
+    else { ctx.strokeStyle='#22d3ee';ctx.lineWidth=S*.035;ctx.beginPath();ctx.ellipse(0,-H2*.15,W2*1.6,H2*.72,Math.sin(t/700)*.22,0,Math.PI*2);ctx.stroke();ctx.strokeStyle='#a855f7';ctx.lineWidth=S*.022;ctx.beginPath();ctx.ellipse(0,-H2*.15,W2*1.85,H2*.9,-Math.sin(t/900)*.24,0,Math.PI*2);ctx.stroke();for(let j=0;j<4;j++){const a=t/900+j*Math.PI/2;ctx.fillStyle=j%2?'#f783ac':'#22d3ee';ctx.shadowColor=ctx.fillStyle;ctx.shadowBlur=12;ctx.beginPath();ctx.arc(Math.cos(a)*W2*1.6,-H2*.15+Math.sin(a)*H2*.72,S*.055,0,Math.PI*2);ctx.fill();}ctx.shadowBlur=0;ctx.fillStyle='#22d3ee';ctx.font='900 '+(S*.09)+'px system-ui';ctx.textAlign='center';ctx.fillText('X',-W2*.48,-H2*.5);ctx.fillText('X',W2*.48,-H2*.5); }
+    ctx.restore();
     if (t < b.hitUntil) { ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.beginPath(); ctx.ellipse(0, 0, W2 * 1.1, H2 * 1.05, 0, 0, 6.283); ctx.fill(); }
     if (b.dead) { ctx.strokeStyle = '#1a1a1a'; ctx.lineWidth = S * 0.03; for (const sx2 of [-ex, ex]) { ctx.beginPath(); ctx.moveTo(sx2 - er, ey - er); ctx.lineTo(sx2 + er, ey + er); ctx.moveTo(sx2 + er, ey - er); ctx.lineTo(sx2 - er, ey + er); ctx.stroke(); } }
     ctx.restore();

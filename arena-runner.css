@@ -145,3 +145,10 @@
 @keyframes ar-runner-mapban{0%{opacity:0;transform:translate(-50%,-50%) scale(.5)}12%{opacity:1;transform:translate(-50%,-50%) scale(1.06)}20%{transform:translate(-50%,-50%) scale(1)}82%{opacity:1;transform:translate(-50%,-50%) scale(1)}100%{opacity:0;transform:translate(-50%,-60%) scale(.95)}}
 .ar-runner-mapchip{color:#fff;font-size:11px;font-weight:900;border-radius:999px;padding:1px 7px;margin-left:4px;white-space:nowrap}
 @media (prefers-reduced-motion:reduce){.ar-runner-mapban.show{animation:none;opacity:1;transform:translate(-50%,-50%)}.ar-runner-bossbar.hit{animation:none}}
+
+
+/* v9 퀴즈 런: 맵 보스의 비네임드가 아닌 고유 보스 출현 카드 */
+.ar-runner-bossbar{border-width:3px;box-shadow:0 0 20px rgba(255,107,107,.45),0 5px 14px rgba(0,0,0,.4)}
+.ar-runner-bossbar b{font-size:clamp(15px,2.1vw,21px);text-shadow:0 0 10px rgba(255,212,59,.55)}
+.ar-runner-bossbar.hit{animation:ar-runner-bhit .45s,ar-runner-bossglow 1s ease-in-out infinite alternate}
+@keyframes ar-runner-bossglow{to{box-shadow:0 0 26px rgba(255,212,59,.75),0 5px 14px rgba(0,0,0,.45)}}

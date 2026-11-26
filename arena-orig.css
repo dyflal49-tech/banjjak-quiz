@@ -520,3 +520,38 @@
   .ar-o-fl.grow .stem,.ar-o-fl.grow .head{animation:none!important}
   .ar-o-petalrain{display:none}
 }
+
+
+/* v9 보스 레이드: 종족별 원소 오라와 위압적인 실루엣 */
+.ar-o-bsvg{overflow:visible;filter:drop-shadow(0 9px 8px rgba(0,0,0,.5))}
+.ar-o-bsvg .blush{display:none}
+.ar-o-bsvg .mouth.m-normal path{d:path('M76 122 Q100 146 124 122 L119 136 Q100 151 81 136 Z')}
+.ar-o-bsvg .eyes ellipse{fill:#fff3bf}
+.ar-o-bsvg .pupil{filter:drop-shadow(0 0 5px #ff3b3b)}
+.ar-o-bsvg .species{transform-origin:100px 100px;animation:ar-o-species 3s ease-in-out infinite alternate}
+.ar-o-bsvg .core,.ar-o-bsvg .coreline{filter:drop-shadow(0 0 7px currentColor);animation:ar-o-core 1.2s ease-in-out infinite alternate}
+.ar-o-bsvg .sigil{transform-origin:100px 100px;animation:ar-o-sigil 18s linear infinite}
+.ar-o-bsvg .wing{transform-origin:100px 90px;animation:ar-o-wing 1.3s ease-in-out infinite alternate}
+.ar-o-boss[data-kind="1"] .ar-o-aura{background:radial-gradient(circle,#ff6b00 0,rgba(255,50,0,.4) 45%,transparent 72%);opacity:.6}
+.ar-o-boss[data-kind="2"] .ar-o-aura{background:radial-gradient(circle,#74c0fc 0,rgba(116,192,252,.4) 45%,transparent 72%);opacity:.6}
+.ar-o-boss[data-kind="3"] .ar-o-aura{background:radial-gradient(circle,#22d3ee 0,rgba(76,110,245,.4) 45%,transparent 72%);opacity:.65}
+.ar-o-boss[data-kind="4"] .ar-o-aura{background:radial-gradient(circle,#ffd43b 0,rgba(255,146,43,.4) 45%,transparent 72%);opacity:.65}
+.ar-o-boss[data-kind="5"] .ar-o-aura{background:radial-gradient(circle,#a855f7 0,rgba(60,0,100,.5) 45%,transparent 72%);opacity:.65}
+.ar-o-boss[data-kind="6"] .ar-o-aura{background:radial-gradient(circle,#00e5ff 0,rgba(52,58,64,.6) 45%,transparent 72%);opacity:.65}
+.ar-o-boss[data-kind="7"] .ar-o-aura{background:conic-gradient(from 0deg,#f03e3e,#9775fa,#22d3ee,#ffd43b,#f03e3e);opacity:.42;animation:ar-o-pulse .65s ease-in-out infinite alternate}
+.ar-o-boss[data-kind="7"] .ar-o-bsvg{filter:drop-shadow(0 0 14px #9775fa) drop-shadow(0 10px 8px rgba(0,0,0,.6))}
+.ar-o-warnmid{border-color:#ffd43b;box-shadow:0 0 35px rgba(255,90,20,.7)}
+.ar-o-warntxt{font-size:clamp(22px,4vw,46px);text-shadow:0 0 15px #ff6b00,0 3px #210600}
+.ar-o-banner{font-weight:1000;text-shadow:0 3px 0 #260400,0 0 15px #ff922b}
+@keyframes ar-o-species{from{transform:translateY(1px) scale(1)}to{transform:translateY(-5px) scale(1.035)}}
+@keyframes ar-o-core{from{opacity:.75}to{opacity:1;filter:drop-shadow(0 0 12px currentColor)}}
+@keyframes ar-o-sigil{to{transform:rotate(360deg)}}
+@keyframes ar-o-wing{from{transform:scaleX(.9) rotate(-3deg)}to{transform:scaleX(1.08) rotate(3deg)}}
+@media(prefers-reduced-motion:reduce){.ar-o-bsvg .species,.ar-o-bsvg .core,.ar-o-bsvg .sigil,.ar-o-bsvg .wing{animation:none}}
+
+.ar-o-bsvg .boss-faceplate{transform-origin:100px 100px;animation:ar-o-mask 2.4s ease-in-out infinite alternate}
+.ar-o-bsvg .boss-faceplate .visor{filter:drop-shadow(0 0 8px currentColor);animation:ar-o-visor .7s ease-in-out infinite alternate}
+.ar-o-bsvg .blush,.ar-o-bsvg .eyes{display:none!important}
+.ar-o-bsvg .bbody>path{filter:drop-shadow(0 0 2px rgba(0,0,0,.5))}
+@keyframes ar-o-mask{from{transform:translateY(1px)}to{transform:translateY(-3px) scale(1.015)}}
+@keyframes ar-o-visor{to{opacity:.72;filter:drop-shadow(0 0 13px currentColor)}}

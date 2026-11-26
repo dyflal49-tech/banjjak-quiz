@@ -440,7 +440,7 @@
   // 3. 보스 레이드: 보스를 쓰러뜨리면 더 강한 보스가 이어서 등장 (level 1, 2, 3 ...)
   // =====================================================================
   const BOSS_PAL = [['#8e5bd6', '#b794f6', '#3b1d6e'], ['#ff6b6b', '#ffc9c9', '#7a1f1f'], ['#5c7cfa', '#bac8ff', '#1b2a6e'], ['#2f9e44', '#b2f2bb', '#0b3d1a'], ['#343a40', '#ffd43b', '#000000'], ['#e8590c', '#ffd8a8', '#5c1f00'], ['#0ca678', '#96f2d7', '#063d30'], ['#c2255c', '#fcc2d7', '#4a0a24']];
-  const ATTACKS = [{ id: 'slam', name: '땅 내려찍기!' }, { id: 'charge', name: '돌진 공격!' }, { id: 'laser', name: '눈빛 레이저!' }, { id: 'meteor', name: '운석 소나기!' }];
+  const ATTACKS = [{ id: 'meteor', name: '용암 폭우!' }, { id: 'slam', name: '빙하 창격!' }, { id: 'charge', name: '심연의 촉수 강타!' }, { id: 'meteor', name: '천둥 낙뢰!' }, { id: 'laser', name: '그림자 화염!' }, { id: 'laser', name: '미사일 일제 발사!' }, { id: 'meteor', name: '혼돈 운석 소환!' }];
   const lvOf = s => Math.max(1, Math.round(N(s && s.level, 1)));
   const palOf = lv => BOSS_PAL[(lv - 1) % BOSS_PAL.length];
   const atkOf = lv => ATTACKS[(Math.max(1, lv) - 1) % ATTACKS.length];
@@ -449,7 +449,7 @@
   const vibrate = p => { try { if (navigator.vibrate) navigator.vibrate(p); } catch { /* 무시 */ } };
   // 단계 1: 기본, 2: 왕관+큰 뿔, 3: 강철 투구·갑옷·붉은 눈, 4: 날개·셋째 눈·긴 뿔, 5 이상: 모두 + 불꽃 왕관 (색은 단계마다 바뀜)
   function bossSVG(pal, lv = 1) {
-    const k = K(), S = k.S; const [body, belly, ink] = pal;
+    const k = K(), S = k.S; const [body, belly, ink] = pal; const glow = belly;
     const f = Math.min(Math.max(1, Math.round(lv)), 4), ult = lv >= 5;
     const stroke = { stroke: ink, 'stroke-width': 4, 'stroke-linejoin': 'round' };
     const hornPts = f >= 4 ? '50,62 4,-16 30,24 84,40' : f >= 2 ? '52,60 26,-2 84,40' : '54,58 38,12 82,42';
@@ -485,6 +485,19 @@
         f >= 4 ? S('g', { class: 'eye3' }, S('ellipse', { cx: 100, cy: 56, rx: 9, ry: 11, fill: '#ff2020', ...stroke, 'stroke-width': 3 }), S('circle', { cx: 100, cy: 57, r: 4, fill: '#1a0000' })) : null,
         f >= 3 ? S('g', { class: 'pads' }, S('polygon', { points: padL, fill: '#868e96', ...stroke }), S('polygon', { points: mirrorPts(padL), fill: '#868e96', ...stroke })) : null,
         f >= 2 ? S('g', { class: 'crown' }, S('polygon', { points: '70,44 74,14 88,32 100,6 112,32 126,14 130,44', fill: '#fcc419', ...stroke }), S('circle', { cx: 100, cy: 32, r: 4.5, fill: '#e03131' }), S('circle', { cx: 84, cy: 38, r: 3.5, fill: '#4dabf7' }), S('circle', { cx: 116, cy: 38, r: 3.5, fill: '#4dabf7' })) : null,
+        (lv > 0 ? S('g', { class: 'boss-faceplate' },
+          S('path', { d: 'M43 73 L57 59 L100 52 L143 59 L157 73 L146 126 L126 148 L100 158 L74 148 L54 126 Z', fill: '#202638', stroke: '#0a0d18', 'stroke-width': 5, 'stroke-linejoin': 'round' }),
+          S('path', { d: 'M54 84 L94 75 L83 99 L57 102 Z M146 84 L106 75 L117 99 L143 102 Z', fill: glow, stroke: '#fff', 'stroke-width': 2, 'stroke-linejoin': 'round', class: 'visor' }),
+          S('path', { d: 'M60 116 L140 116 L128 141 L112 132 L100 146 L88 132 L72 141 Z', fill: '#080a12', stroke: ink, 'stroke-width': 3, 'stroke-linejoin': 'round' }),
+          S('path', { d: 'M72 117 L85 117 L82 128 Z M92 117 L105 117 L99 128 Z M114 117 L127 117 L118 128 Z', fill: '#f8f9fa' }),
+          S('path', { d: 'M48 103 L34 121 L52 116 M152 103 L166 121 L148 116', fill: 'none', stroke: glow, 'stroke-width': 5, 'stroke-linecap': 'round' })) : null),
+        (lv === 1 ? S('g', { class: 'species igneous' }, S('path', { d: 'M52 56 L26 8 L72 36 L91 0 L104 38 L137 5 L146 55', fill: body, stroke: ink, 'stroke-width': 5, 'stroke-linejoin': 'round' }), S('path', { d: 'M66 145 L88 123 L101 147 L119 122 L137 150 L126 170 L73 170 Z', fill: '#ff6b00', stroke: '#ffd43b', 'stroke-width': 3, class: 'core' })) : null),
+        (lv === 2 ? S('g', { class: 'species frost' }, S('path', { d: 'M45 65 L21 22 L60 43 L74 3 L97 39 L120 3 L137 43 L177 22 L155 66', fill: '#a5d8ff', stroke: '#1864ab', 'stroke-width': 4, 'stroke-linejoin': 'round' }), S('path', { d: 'M45 110 L20 88 L49 88 L33 63 L65 78 M155 110 L180 88 L151 88 L167 63 L135 78', fill: '#d0ebff', stroke: '#74c0fc', 'stroke-width': 4 })) : null),
+        (lv === 3 ? S('g', { class: 'species kraken' }, S('path', { d: 'M40 132 Q5 151 17 181 M61 145 Q39 167 44 193 M139 145 Q161 167 156 193 M160 132 Q195 151 183 181', fill: 'none', stroke: '#4c6ef5', 'stroke-width': 9, 'stroke-linecap': 'round' }), S('ellipse', { cx: 100, cy: 76, rx: 13, ry: 23, fill: '#00e5ff', stroke: '#fff', 'stroke-width': 3, class: 'core' })) : null),
+        (lv === 4 ? S('g', { class: 'species storm' }, S('path', { d: 'M29 29 L66 52 L49 55 L81 77 M171 29 L134 52 L151 55 L119 77', fill: 'none', stroke: '#fff3bf', 'stroke-width': 7, 'stroke-linecap': 'round', class: 'coreline' }), S('path', { d: 'M87 147 L112 119 L101 145 L122 137 L94 173', fill: '#ffd43b', stroke: '#fff', 'stroke-width': 2, class: 'core' })) : null),
+        (lv === 5 ? S('g', { class: 'species dragon' }, S('path', { d: 'M49 94 Q6 42 7 34 Q43 42 73 73 M151 94 Q194 42 193 34 Q157 42 127 73', fill: '#24123b', stroke: '#a855f7', 'stroke-width': 5, 'stroke-linejoin': 'round' }), S('path', { d: 'M54 49 L43 7 L83 40 M146 49 L157 7 L117 40', fill: 'none', stroke: '#ced4da', 'stroke-width': 8, 'stroke-linecap': 'round' })) : null),
+        (lv === 6 ? S('g', { class: 'species mech' }, S('path', { d: 'M38 62 L18 48 L24 129 L48 143 M162 62 L182 48 L176 129 L152 143', fill: '#495057', stroke: '#111', 'stroke-width': 5 }), S('rect', { x: 85, y: 126, width: 30, height: 35, rx: 5, fill: '#00e5ff', stroke: '#fff', 'stroke-width': 3, class: 'core' }), S('path', { d: 'M43 74 L157 74 M42 151 L158 151', stroke: '#adb5bd', 'stroke-width': 9 })) : null),
+        (lv >= 7 ? S('g', { class: 'species chaos' }, S('path', { d: 'M31 39 L61 56 L72 9 L96 45 L119 3 L132 53 L172 24 L152 73 L184 86 L151 104 L173 152 L128 138 L100 179 L72 138 L27 152 L49 104 L16 86 L48 73 Z', fill: 'none', stroke: '#f783ac', 'stroke-width': 6, 'stroke-linejoin': 'round', class: 'coreline' }), S('path', { d: 'M69 128 L100 111 L131 128 L100 151 Z', fill: '#fff', stroke: '#ffd43b', 'stroke-width': 4, class: 'core' })) : null),
         ult ? S('g', { class: 'flames' }, S('path', { d: 'M78 12 Q70 -14 86 -30 Q88 -10 100 -24 Q112 -10 114 -30 Q130 -14 122 12 Z', fill: '#ff6b00' }), S('path', { d: 'M88 12 Q84 -4 92 -14 Q96 -2 100 -10 Q104 -2 108 -14 Q116 -4 112 12 Z', fill: '#ffe066' })) : null));
   }
   let sirenCtx = null;
@@ -632,7 +645,9 @@
     st.boss.style.setProperty('--bs', bossScale(lv).toFixed(2));
     K().cls(st.boss, 'ult', lv >= 5);
     st.boss.dataset.tier = String(Math.min(lv, 4));
-    txt(st.lvTag, lv + '단계');
+    st.boss.dataset.kind = String(lv);
+    if (st.scene) st.scene.dataset.boss = String(lv);
+    txt(st.lvTag, lv === N(mState(st.v).bossCount) ? '최종 보스' : lv + '단계');
     st.lookLv = lv;
   }
   function updateTally(st) {
@@ -655,7 +670,7 @@
     }, delay);
     k.later(st, () => {
       st.banner.classList.remove('on');
-      txt(st.warnTxt, lv + '단계 보스 등장!');
+      txt(st.warnTxt, (S2(mState(st.v).bossName) || '새 보스') + ' 등장!');
       replay(st.warn, 'on'); k.cls(st.scene, 'dark', true); siren();
       if (reduced()) blink(st);
     }, delay + 1500);
@@ -669,7 +684,7 @@
     k.later(st, () => {
       st.warn.classList.remove('on'); k.cls(st.scene, 'dark', false); st.boss.classList.remove('arrive');
       replay(st.boss, 'roar'); snd('boom');
-      showBanner(st, lv + '단계 보스! 반격이 더 강해졌어요', true);
+      showBanner(st, (S2(s.bossName) || '보스') + ' 등장! 반격이 더 강해졌어요', true);
       st.arriving = false;
     }, delay + 4300);
     return 4500;
@@ -824,7 +839,7 @@
       replay(st.strip, 'arrive'); st.pop.replaceChildren(H('small', { text: '새 보스 등장!' }), H('b', { text: lv + '단계' })); k.cls(st.pop, 'crit', true); replay(st.pop, 'on');
       snd('boom'); vibrate([60, 40, 60]);
     }
-    txt(st.lvTag, lv + '단계 ');
+    txt(st.lvTag, lv === N(s.bossCount) ? '최종 보스 ' : lv + '단계 ');
     const me = meOf(v); const nick = me ? S2(me.nickname) : null;
     const maxHp = Math.max(1, N(s.bossMaxHp, 1)), hp = Math.max(0, N(s.bossHp));
     txt(st.name, S2(s.bossName) || '보스');
