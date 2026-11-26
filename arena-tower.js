@@ -543,7 +543,7 @@
   function land(st, g, t) {
     const dx = Math.round((g.x - g.topX) * 1000) / 1000;
     const ad = Math.abs(dx);
-    const perfect = ad <= 0.12, ok = ad < 0.6;
+    const perfect = ad <= 0.09, ok = ad < 0.5;
     g.results.push({ dx, ok });
     const K = kit();
     if (ok) {

@@ -1,472 +1,328 @@
 'use strict';
-/* 반짝퀴즈 마블 레이스 렌더러 (KQ.arena.marble)
-   - 모으기(collect): 진행자 화면에 학생별 마블 병, 학생 기기에 내 마블 띠
-   - 레이스(race): 구불구불한 마블 코스 위에서 모든 마블이 계약서 공식대로 달림 */
+/* 반짝퀴즈 마블 레이스 그래픽 (KQ.arena.marble)
+   - collect: 진행자 퀴즈 중 학생별 구슬 병. race: marble-physics.js 로 같은 레이스를 실시간 재생.
+   - 가장 늦게 도착한 구슬의 주인이 1등. 카메라는 갈수록 남은 마지막 구슬들을 비춤. */
 (() => {
   const KQ = window.KQ || (window.KQ = {});
   KQ.arena = KQ.arena || {};
-  const TAU = Math.PI * 2;
-  const VB_W = 1000, VB_H = 600;
-  const TRACK_D = 'M 110 70 L 920 70 A 60 60 0 0 1 920 190 L 80 190 A 60 60 0 0 0 80 310 L 920 310 A 60 60 0 0 1 920 430 L 80 430 A 50 50 0 0 0 80 530 L 330 530';
-  const LANE_W = 30;
-  const SLOT = { x0: 366, y0: 506, dx: 20.5, dy: 21, cols: 30 };
-  const STAGE_BOX = { x: 14, y: 16, w: 88, h: 106 };
-  const MAX_JARS = 48;
-  const SAMPLES = 900;
-
   const K = () => KQ.modeKit;
-  const clamp01 = v => (v < 0 ? 0 : v > 1 ? 1 : v);
-  const n0 = v => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
-  const snd = k => { try { if (KQ.sound && KQ.sound.play) KQ.sound.play(k); } catch {} };
-  const fx = (name, ...a) => { try { if (KQ.fx && typeof KQ.fx[name] === 'function') KQ.fx[name](...a); } catch {} };
-  const nowMs = () => { try { return KQ.now ? KQ.now() : Date.now(); } catch { return Date.now(); } };
-  const colorOk = c => (typeof c === 'string' && /^#[0-9a-fA-F]{3,8}$/.test(c)) ? c : '#0aa3a3';
-
-  // 계약서의 마블 위치 공식
-  function rawP(m, t) {
-    const T = Math.max(1, n0(m.T) || 1);
-    const u = clamp01(t / T);
-    const env = 4 * u * (1 - u);
-    let s = 0;
-    const w = Array.isArray(m.w) ? m.w : [];
-    for (let i = 0; i < 2; i++) { const k = w[i]; if (k) s += n0(k.a) * Math.sin(TAU * n0(k.f) * u + n0(k.ph)); }
-    return clamp01(u + env * s);
-  }
-  // 학생별 가장 앞선 마블 기준 실시간 순위
-  function liveOrder(marbles, t, maxP) {
-    const best = new Map();
-    for (const m of marbles) {
-      const T = Math.max(1, n0(m.T));
-      const done = t >= T;
-      let p = done ? 1 : rawP(m, t);
-      if (maxP) { const prev = maxP.get(m.id) || 0; if (p < prev) p = prev; else maxP.set(m.id, p); }
-      const cur = best.get(m.owner);
-      const cand = { owner: m.owner, nickname: m.nickname, color: m.color, gold: !!m.gold, done, place: n0(m.place) || 9999, p, marble: m };
-      if (!cur) { best.set(m.owner, cand); continue; }
-      if (cand.done && (!cur.done || cand.place < cur.place)) best.set(m.owner, cand);
-      else if (!cand.done && !cur.done && cand.p > cur.p) best.set(m.owner, cand);
-    }
-    return [...best.values()].sort((a, b) => (a.done !== b.done ? (a.done ? -1 : 1) : a.done ? a.place - b.place : b.p - a.p));
-  }
-
-  function avatarEl(av, size, nick, extra = '') {
-    const { H, colorFor } = K();
-    const w = H('span', { class: ('ar-marble-av ' + extra).trim(), 'aria-hidden': 'true', style: { width: size + 'px', height: size + 'px' } });
-    try {
-      if (av && typeof av === 'object' && KQ.avatar && typeof KQ.avatar.render === 'function') {
-        const r = KQ.avatar.render(av, size);
-        if (r instanceof Node) { w.append(r); return w; }
-      }
-    } catch {}
-    w.classList.add('fb');
-    w.style.background = colorFor(nick || '?');
-    w.style.fontSize = Math.round(size * 0.48) + 'px';
-    w.textContent = Array.from(String(nick || '?'))[0] || '?';
+  const N = (v, d = 0) => { const n = Number(v); return Number.isFinite(n) ? n : d; };
+  const S = v => (v === null || v === undefined) ? '' : String(v);
+  const A = a => Array.isArray(a) ? a : [];
+  const now = () => { try { return KQ.now ? KQ.now() : Date.now(); } catch { return Date.now(); } };
+  const snd = k => { try { KQ.sound && KQ.sound.play && KQ.sound.play(k); } catch { /* 무시 */ } };
+  const fx = (n, ...a) => { try { if (KQ.fx && typeof KQ.fx[n] === 'function') KQ.fx[n](...a); } catch { /* 무시 */ } };
+  const reduced = () => { try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return false; } };
+  const fmt = n => N(n).toLocaleString('ko-KR');
+  const safeColor = c => (typeof c === 'string' && /^#[0-9a-fA-F]{3,8}$/.test(c)) ? c : '#4dabf7';
+  function el(tag, cls, text) { const n = document.createElement(tag); if (cls) n.className = cls; if (text !== undefined) n.textContent = text; return n; }
+  function avatarEl(p, size) {
+    let n = null;
+    try { if (p && p.avatar && KQ.avatar && typeof KQ.avatar.render === 'function') n = KQ.avatar.render(p.avatar, size); } catch { n = null; }
+    const w = el('span', 'ar-mb-av'); w.style.width = w.style.height = size + 'px';
+    if (n instanceof Node) w.append(n); else { w.classList.add('fb'); w.textContent = Array.from(S(p && p.nickname) || '?')[0]; }
     return w;
   }
-  function dot(color, gold, cls = '') {
-    const { H } = K();
-    return H('span', { class: 'ar-marble-dot' + (gold ? ' gold' : '') + (cls ? ' ' + cls : ''), style: { '--c': colorOk(color) } });
-  }
-  function svgDefs(S, uid) {
-    return S('defs', {},
-      S('radialGradient', { id: 'arm-shine-' + uid, cx: '35%', cy: '30%', r: '70%' },
-        S('stop', { offset: '0%', 'stop-color': '#fff', 'stop-opacity': '0.95' }),
-        S('stop', { offset: '35%', 'stop-color': '#fff', 'stop-opacity': '0.25' }),
-        S('stop', { offset: '100%', 'stop-color': '#000', 'stop-opacity': '0.25' })),
-      S('radialGradient', { id: 'arm-gold-' + uid, cx: '35%', cy: '30%', r: '75%' },
-        S('stop', { offset: '0%', 'stop-color': '#fffbe0' }),
-        S('stop', { offset: '45%', 'stop-color': '#ffd43b' }),
-        S('stop', { offset: '100%', 'stop-color': '#b8860b' })),
-      S('pattern', { id: 'arm-check-' + uid, width: 8, height: 8, patternUnits: 'userSpaceOnUse' },
-        S('rect', { width: 8, height: 8, fill: '#fff' }), S('rect', { width: 4, height: 4, fill: '#222' }), S('rect', { x: 4, y: 4, width: 4, height: 4, fill: '#222' })),
-      S('linearGradient', { id: 'arm-bg-' + uid, x1: 0, y1: 0, x2: 0, y2: 1 },
-        S('stop', { offset: '0%', 'stop-color': '#12b5b0' }), S('stop', { offset: '100%', 'stop-color': '#086a74' })));
-  }
+  const msOf = v => (v && v.modeState && typeof v.modeState === 'object') ? v.modeState : {};
+  const meOf = v => (v && v.me && typeof v.me === 'object') ? v.me : null;
+  const isRace = v => { const s = msOf(v); return s.stage === 'race' && !!s.mapId && Array.isArray(s.marbles) && !!window.KQMarble; };
 
-  // =====================================================================
-  // 진행자: 마블 모으기
-  // =====================================================================
+  // ======================= 진행자: 구슬 모으기 =======================
   function hostCollect(root, v) {
-    const k = K(); const { H } = k; const s = k.ms(v);
-    const st = k.prep(root, 'marble-host-collect', ['ar-marble-host', 'ar-marble-collect'], (st, r) => {
-      st.total = H('strong', { class: 'ar-marble-total-num' }, '0');
-      st.goldN = H('strong', { class: 'ar-marble-gold-num' }, '0');
-      st.people = H('span', { class: 'ar-marble-people' }, '');
-      st.title = H('div', { class: 'ar-marble-title' }, '마블을 모아요!');
-      st.head = H('div', { class: 'ar-marble-head' }, st.title,
-        H('div', { class: 'ar-marble-total' }, dot('#0aa3a3', false, 'big'), H('span', {}, '모은 마블'), st.total, dot('#ffd43b', true, 'big'), H('span', {}, '황금'), st.goldN, st.people));
-      st.grid = H('div', { class: 'ar-marble-jars' });
-      st.more = H('p', { class: 'ar-marble-more', hidden: true });
-      st.empty = H('div', { class: 'ar-marble-empty' },
-        H('strong', {}, '정답 하나 = 마블 하나'),
-        H('span', {}, '빨리 맞히면 조금 더 빠른 황금 마블이 돼요. 마지막에 모든 마블이 함께 달려요!'));
-      st.jars = new Map(); st.orderKey = ''; st.lastPop = 0;
-      r.append(st.head, st.empty, st.grid, st.more);
+    const k = K(); const s = msOf(v);
+    const st = k.prep(root, 'ar-mb-collect', ['ar-mb', 'ar-mb-collect'], (st, r) => {
+      st.total = el('b', 'ar-mb-total-n', '0'); st.gold = el('b', 'ar-mb-total-g', '0');
+      st.head = el('div', 'ar-mb-chead');
+      const t = el('div', 'ar-mb-ctitle'); t.append(el('span', 'ar-mb-ctxt', '구슬을 모아요!'), el('small', null, '마지막 레이스는 늦게 들어오는 구슬이 1등!'));
+      const tot = el('div', 'ar-mb-ctot'); tot.append(el('span', 'ar-mb-dot big'), el('span', null, '구슬 '), st.total, el('span', 'ar-mb-dot big gold'), el('span', null, '황금 '), st.gold);
+      st.head.append(t, tot);
+      st.grid = el('div', 'ar-mb-jars'); st.toast = el('div', 'ar-mb-toast');
+      st.jars = new Map(); st.gainKey = null;
+      r.append(st.head, st.grid, st.toast);
     });
-    const players = k.arr(s.players).filter(p => p && p.id);
-    const sorted = players.slice().sort((a, b) => (n0(b.marbles) - n0(a.marbles)) || (n0(b.gold) - n0(a.gold)) || String(a.nickname || '').localeCompare(String(b.nickname || ''), 'ko'));
-    const shown = sorted.slice(0, MAX_JARS);
-    let total = 0, gold = 0;
-    for (const p of players) { const m = n0(p.marbles); total += m; gold += Math.min(m, n0(p.gold)); }
-    if (k.str(st.total.textContent) !== String(total)) { const was = Number(st.total.textContent) || 0; k.txt(st.total, total); if (!st.first && total > was) k.replay(st.total, 'bump'); }
-    k.txt(st.goldN, gold);
-    k.txt(st.people, players.length ? `참가 ${players.length}명` : '');
-    k.txt(st.title, v.phase === 'finished' ? '마블 모으기 끝' : v.phase === 'countdown' ? '곧 마블 모으기 시작!' : '마블을 모아요!');
-    k.show(st.empty, total === 0);
-    k.show(st.grid, shown.length > 0);
-    k.css(root, '--ar-jar', shown.length > 32 ? '74px' : shown.length > 18 ? '86px' : '104px');
+    const players = A(s.players).slice().sort((a, b) => (N(b.marbles) - N(a.marbles)) || S(a.nickname).localeCompare(S(b.nickname), 'ko'));
+    let tot = 0, gold = 0;
     const seen = new Set();
-    let popped = 0;
-    for (const p of shown) {
-      seen.add(p.id);
+    players.forEach((p, i) => {
+      tot += N(p.marbles); gold += N(p.gold); seen.add(p.id);
       let j = st.jars.get(p.id);
       if (!j) {
-        j = { count: 0, goldC: 0 };
-        j.tube = H('div', { class: 'ar-marble-tube' });
-        j.cnt = H('span', { class: 'ar-marble-cnt' }, '0');
-        j.name = H('span', { class: 'ar-marble-name' }, '');
-        j.node = H('div', { class: 'ar-marble-jar' }, H('div', { class: 'ar-marble-glass' }, j.tube, j.cnt), H('div', { class: 'ar-marble-who' }, avatarEl(p.avatar, 26, p.nickname), j.name));
-        j.avKey = JSON.stringify(p.avatar || null);
-        st.jars.set(p.id, j);
+        j = { node: el('div', 'ar-mb-jar'), glass: el('div', 'ar-mb-glass'), cnt: el('b', 'ar-mb-jcnt', '0'), more: el('span', 'ar-mb-more', ''), n: -1 };
+        const nm = el('div', 'ar-mb-jname'); nm.append(avatarEl(p, 22), el('span', null, S(p.nickname)));
+        j.glass.append(j.more); j.node.append(j.cnt, j.glass, nm); st.jars.set(p.id, j);
       }
-      k.txt(j.name, p.nickname || '');
-      const c = Math.min(12, n0(p.marbles)), gc = Math.min(c, n0(p.gold));
-      if (c !== j.count || gc !== j.goldC) {
-        const add = c - j.count;
-        j.tube.replaceChildren(...Array.from({ length: c }, (_, i) => {
-          const d = dot(p.color, i < gc);
-          if (!st.first && add > 0 && i >= c - add) { d.classList.add('pop'); d.style.animationDelay = ((i - (c - add)) * 0.12) + 's'; }
-          return d;
-        }));
-        if (!st.first && add > 0) { popped += add; k.replay(j.node, 'got'); }
-        j.count = c; j.goldC = gc;
+      if (st.grid.children[i] !== j.node) st.grid.insertBefore(j.node, st.grid.children[i] || null);
+      const m = N(p.marbles), g = Math.min(m, N(p.gold));
+      if (m !== j.n) {
+        const prev = j.n, grew = prev >= 0 && m > prev; j.n = m; j.cnt.textContent = fmt(m);
+        const show = Math.min(m, 15), col = safeColor(p.color);
+        j.glass.querySelectorAll('.ar-mb-dot').forEach(d => d.remove());
+        for (let q = 0; q < show; q++) { const d = el('span', 'ar-mb-dot' + (q < g ? ' gold' : '')); d.style.setProperty('--c', col); if (grew && q >= show - (m - prev)) d.classList.add('pop'); j.glass.insertBefore(d, j.more); }
+        j.more.textContent = m > 15 ? '+' + (m - 15) : '';
+        if (grew) k.replay(j.node, 'grow');
       }
-      k.txt(j.cnt, String(n0(p.marbles)));
-      k.cls(j.node, 'full', n0(p.marbles) >= 12);
-    }
+    });
     for (const [id, j] of st.jars) if (!seen.has(id)) { j.node.remove(); st.jars.delete(id); }
-    const key = shown.map(p => p.id).join(',');
-    if (key !== st.orderKey) { st.orderKey = key; st.grid.replaceChildren(...shown.map(p => st.jars.get(p.id).node)); }
-    const extra = sorted.length - shown.length;
-    k.show(st.more, extra > 0); if (extra > 0) k.txt(st.more, `그 밖에 ${extra}명도 마블을 모으고 있어요.`);
-    if (popped && Date.now() - st.lastPop > 350) { st.lastPop = Date.now(); snd('pop'); }
+    st.total.textContent = fmt(tot); st.gold.textContent = fmt(gold);
+    const lg = s.lastGain; const gk = lg ? S(lg.q) + ':' + A(lg.items).length : '';
+    if (st.gainKey === null) st.gainKey = gk;
+    else if (lg && gk !== st.gainKey) {
+      st.gainKey = gk;
+      if (A(lg.items).length) {
+        const sum = A(lg.items).reduce((n, x) => n + N(x.count), 0), gsum = A(lg.items).reduce((n, x) => n + N(x.gold), 0);
+        st.toast.textContent = `${A(lg.items).length}명이 구슬 ${sum}개 획득!` + (gsum ? ` (황금 ${gsum}개)` : '');
+        k.replay(st.toast, 'show'); snd('coin');
+      }
+    }
   }
 
-  // =====================================================================
-  // 진행자: 마지막 레이스
-  // =====================================================================
+  // ======================= 진행자: 레이스 =======================
+  function ownerColor(st, id) { const m = st.info.get(id); return m ? safeColor(m.color) : '#4dabf7'; }
   function hostRace(root, v) {
-    const k = K(); const { H, S } = k; const s = k.ms(v);
-    const marbles = k.arr(s.marbles).filter(m => m && m.id);
-    const sig = 'marble-host-race:' + n0(s.raceStart) + ':' + marbles.length;
-    const st = k.prep(root, sig, ['ar-marble-host', 'ar-marble-race'], (st, r) => {
-      const uid = 'r' + st.uid;
-      st.svg = S('svg', { viewBox: `0 0 ${VB_W} ${VB_H}`, preserveAspectRatio: 'xMidYMid meet', class: 'ar-marble-svg', role: 'img', 'aria-label': '마블 레이스 코스' });
-      st.svg.append(svgDefs(S, uid));
-      st.svg.append(S('rect', { width: VB_W, height: VB_H, rx: 18, fill: `url(#arm-bg-${uid})` }));
-      // 장식: 별가루, 범퍼, 핀
-      const deco = S('g', { class: 'ar-marble-deco' });
-      for (let i = 0; i < 26; i++) deco.append(S('circle', { cx: (i * 137) % 980 + 10, cy: (i * 89) % 580 + 10, r: (i % 3) + 1.2, fill: '#fff', opacity: 0.18 }));
-      for (const [x, y, rr] of [[920, 130, 24], [80, 250, 24], [920, 370, 24], [80, 480, 18]]) {
-        deco.append(S('circle', { cx: x, cy: y, r: rr + 7, fill: '#ff922b', opacity: 0.35 }), S('circle', { cx: x, cy: y, r: rr, fill: '#ff6b6b', stroke: '#fff', 'stroke-width': 4 }), S('circle', { cx: x, cy: y, r: rr * 0.45, fill: '#fff', opacity: 0.8 }));
-      }
-      for (const y of [130, 250, 370]) for (let x = 210; x <= 800; x += 118) {
-        deco.append(S('rect', { x: x - 9, y: y - 9, width: 18, height: 18, rx: 4, fill: '#ffe066', stroke: '#e67700', 'stroke-width': 2.5, transform: `rotate(45 ${x} ${y})` }));
-      }
-      st.svg.append(deco);
-      // 코스
-      st.path = S('path', { d: TRACK_D, fill: 'none', stroke: '#064e57', 'stroke-width': 56, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' });
-      st.svg.append(st.path,
-        S('path', { d: TRACK_D, fill: 'none', stroke: '#e6fcf5', 'stroke-width': 44, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }),
-        S('path', { d: TRACK_D, fill: 'none', stroke: '#96f2d7', 'stroke-width': 3, 'stroke-dasharray': '14 18', opacity: 0.9 }));
-      // 출발 대기 상자, 출발선
-      st.svg.append(S('rect', { x: STAGE_BOX.x - 4, y: STAGE_BOX.y - 4, width: STAGE_BOX.w + 8, height: STAGE_BOX.h + 8, rx: 12, fill: 'rgba(0,0,0,.25)', stroke: '#fff', 'stroke-width': 2, 'stroke-dasharray': '6 5' }),
-        S('rect', { x: 104, y: 46, width: 8, height: 48, fill: '#fff' }),
-        S('text', { x: 58, y: 146, class: 'ar-marble-svgtxt', 'text-anchor': 'middle' }, '출발'));
-      // 결승선, 결승 구역
-      st.svg.append(S('rect', { x: 330, y: 506, width: 14, height: 48, fill: `url(#arm-check-${uid})`, stroke: '#222', 'stroke-width': 1 }),
-        S('rect', { x: SLOT.x0 - 16, y: SLOT.y0 - 16, width: SLOT.cols * SLOT.dx + 22, height: 4 * SLOT.dy + 12, rx: 14, fill: 'rgba(0,0,0,.28)', stroke: '#ffd43b', 'stroke-width': 3 }),
-        S('text', { x: 337, y: 588, class: 'ar-marble-svgtxt small', 'text-anchor': 'middle' }, '결승'));
-      // 마블들
-      st.mg = S('g', { class: 'ar-marble-ms' });
-      st.els = new Map();
-      for (const m of marbles) {
-        const g = S('g', { class: 'ar-marble-m' + (m.gold ? ' gold' : '') });
-        const col = colorOk(m.color);
-        if (m.gold) g.append(S('circle', { r: 10.5, fill: `url(#arm-gold-${uid})`, stroke: col, 'stroke-width': 3 }));
-        else g.append(S('circle', { r: 9.5, fill: col, stroke: 'rgba(0,0,0,.35)', 'stroke-width': 1.5 }));
-        g.append(S('circle', { r: 9, fill: `url(#arm-shine-${uid})`, opacity: m.gold ? 0.55 : 0.9 }));
-        st.mg.append(g);
-        st.els.set(m.id, { g, m, x: 0, y: 0, s: 1 });
-      }
-      st.svg.append(st.mg);
-      // 선두 3명 이름표
-      st.tags = [0, 1, 2].map(i => {
-        const t = S('text', { class: 'ar-marble-tag t' + i, 'text-anchor': 'middle' }, '');
-        const b = S('rect', { class: 'ar-marble-tagbg t' + i, rx: 8, height: 22 });
-        const g = S('g', { class: 'ar-marble-tagg', opacity: 0 }, b, t);
-        st.svg.append(g); return { g, t, b, w: 0, txt: '' };
-      });
-      st.count = H('div', { class: 'ar-marble-count', hidden: true, 'aria-hidden': 'true' });
-      st.banner = H('div', { class: 'ar-marble-banner', hidden: true });
-      const trackBox = H('div', { class: 'ar-marble-trackbox' }, st.svg, st.count, st.banner);
-      // 옆 칸: 실시간 순위 + 해설
-      st.top = H('ol', { class: 'ar-marble-top', 'aria-label': '실시간 순위 1~3위' });
-      st.topRows = [0, 1, 2].map(i => {
-        const av = H('span', { class: 'ar-marble-topav' });
-        const nm = H('span', { class: 'ar-marble-topname' }, '');
-        const sub = H('span', { class: 'ar-marble-topsub' }, '');
-        const li = H('li', { class: 'ar-marble-toprow r' + i, hidden: true }, H('span', { class: 'ar-marble-toprank' }, String(i + 1)), av, H('span', { class: 'ar-marble-topinfo' }, nm, sub));
-        st.top.append(li); return { li, av, nm, sub, owner: null };
-      });
-      st.info = H('div', { class: 'ar-marble-raceinfo' }, `마블 ${marbles.length}개 · ${new Set(marbles.map(m => m.owner)).size}명`);
-      st.talk = H('ul', { class: 'ar-marble-talk', 'aria-live': 'polite', 'aria-label': '레이스 해설' });
-      const side = H('aside', { class: 'ar-marble-side' }, H('h3', {}, '실시간 순위'), st.top, st.info, H('h3', {}, '레이스 해설'), st.talk);
-      r.append(trackBox, side);
-      st.maxP = new Map(); st.lines = []; st.leader = null; st.lastLeadAt = 0; st.flags = {}; st.lastCount = null; st.lastSide = 0;
-      st.samples = null;
-      const loop = () => { if (st.dead) return; try { frame(st); } catch (e) { if (!st.warned) { st.warned = true; console.warn('[마블 레이스]', e); } } st.raf = requestAnimationFrame(loop); };
+    const k = K(); const s = msOf(v);
+    const key = 'ar-mb-race-' + s.mapId + '-' + s.seed + '-' + A(s.marbles).length;
+    const st = k.prep(root, key, ['ar-mb', 'ar-mb-race'], (st, r) => {
+      st.world = window.KQMarble.create(s.mapId, A(s.marbles).map(m => ({ id: m.id, gold: !!m.gold })), s.seed);
+      st.map = st.world.map; st.th = st.map.theme;
+      st.info = new Map(A(s.marbles).map(m => [S(m.id), m]));
+      st.byId = new Map(st.world.bodies.map(b => [b.id, b]));
+      st.owners = new Map();
+      for (const m of A(s.marbles)) { let o = st.owners.get(m.owner); if (!o) { o = { id: m.owner, nickname: S(m.nickname), color: safeColor(m.color), ids: [] }; st.owners.set(m.owner, o); } o.ids.push(S(m.id)); }
+      st.cv = el('canvas', 'ar-mb-cv'); st.ctx = st.cv.getContext('2d');
+      st.side = el('aside', 'ar-mb-side'); st.sideTitle = el('div', 'ar-mb-stitle'); st.sideTitle.append(el('b', null, '남은 구슬'), el('small', null, '오래 남을수록 위로!'));
+      st.remain = el('div', 'ar-mb-remain'); st.list = el('ol', 'ar-mb-rank');
+      st.side.append(st.sideTitle, st.remain, st.list);
+      st.mapTag = el('div', 'ar-mb-maptag', st.map.name);
+      st.banner = el('div', 'ar-mb-banner'); st.cd = el('div', 'ar-mb-cd');
+      st.result = el('div', 'ar-mb-result'); st.result.hidden = true;
+      const stage = el('div', 'ar-mb-stage'); stage.append(st.cv, st.mapTag, st.banner, st.cd, st.result);
+      r.append(stage, st.side);
+      st.stage = stage; st.cam = { y: -60, x: 400, z: 1 }; st.parts = []; st.seenFin = 0; st.tense = 0; st.started = false; st.shown = false; st.popAt = 0;
+      const resize = () => { const rc = stage.getBoundingClientRect(); const dpr = Math.min(2, window.devicePixelRatio || 1); st.W = Math.max(160, rc.width); st.H = Math.max(160, rc.height); st.dpr = dpr; st.cv.width = Math.round(st.W * dpr); st.cv.height = Math.round(st.H * dpr); };
+      resize(); try { st.ro = new ResizeObserver(resize); st.ro.observe(stage); } catch { /* 무시 */ }
+      const loop = () => { if (st.dead) { try { st.ro && st.ro.disconnect(); } catch { /* 무시 */ } return; } try { frame(st); } catch (e) { if (!st.warned) { st.warned = true; console.warn('[마블 레이스]', e); } } st.raf = requestAnimationFrame(loop); };
       st.raf = requestAnimationFrame(loop);
     });
-    st.view = v; st.s = s; st.marbles = marbles;
-  }
-
-  function sampleTrack(st) {
-    if (st.samples) return st.samples;
-    let L = 0;
-    try { L = st.path.getTotalLength(); } catch { L = 0; }
-    if (!L) return null;
-    const xs = new Float32Array(SAMPLES + 1), ys = new Float32Array(SAMPLES + 1), nx = new Float32Array(SAMPLES + 1), ny = new Float32Array(SAMPLES + 1);
-    for (let i = 0; i <= SAMPLES; i++) { const pt = st.path.getPointAtLength(L * i / SAMPLES); xs[i] = pt.x; ys[i] = pt.y; }
-    for (let i = 0; i <= SAMPLES; i++) {
-      const a = Math.max(0, i - 1), b = Math.min(SAMPLES, i + 1);
-      const dx = xs[b] - xs[a], dy = ys[b] - ys[a]; const len = Math.hypot(dx, dy) || 1;
-      nx[i] = -dy / len; ny[i] = dx / len;
-    }
-    st.samples = { xs, ys, nx, ny, L };
-    return st.samples;
-  }
-  function at(sm, p, lane) {
-    const f = clamp01(p) * SAMPLES; const i = Math.min(SAMPLES - 1, Math.floor(f)); const r = f - i;
-    const off = (clamp01(n0(lane)) - 0.5) * LANE_W;
-    return {
-      x: sm.xs[i] + (sm.xs[i + 1] - sm.xs[i]) * r + (sm.nx[i] + (sm.nx[i + 1] - sm.nx[i]) * r) * off,
-      y: sm.ys[i] + (sm.ys[i + 1] - sm.ys[i]) * r + (sm.ny[i] + (sm.ny[i + 1] - sm.ny[i]) * r) * off
-    };
-  }
-  function slotPos(place) {
-    const i = Math.max(0, place - 1);
-    return { x: SLOT.x0 + (i % SLOT.cols) * SLOT.dx, y: SLOT.y0 + Math.floor(i / SLOT.cols) % 4 * SLOT.dy };
-  }
-  function stagePos(i, n) {
-    const cols = Math.max(4, Math.ceil(Math.sqrt(n * STAGE_BOX.w / STAGE_BOX.h)));
-    const rows = Math.max(1, Math.ceil(n / cols));
-    const cw = STAGE_BOX.w / cols, ch = STAGE_BOX.h / Math.max(rows, 1);
-    return { x: STAGE_BOX.x + cw * (i % cols + 0.5), y: STAGE_BOX.y + ch * (Math.floor(i / cols) + 0.5), s: Math.min(1, Math.min(cw, ch) / 20) };
-  }
-  function say(st, text) {
-    const k = K();
-    st.lines.unshift(text); st.lines.length = Math.min(st.lines.length, 5);
-    st.talk.replaceChildren(...st.lines.map((l, i) => k.H('li', { class: i === 0 ? 'new' : '' }, l)));
+    st.s = s;
   }
 
   function frame(st) {
-    const k = K(); const s = st.s || {}; const marbles = st.marbles || [];
-    const sm = sampleTrack(st); if (!sm) return;
-    const now = nowMs();
-    const raceStart = n0(s.raceStart), raceEnd = n0(s.raceEnd);
-    const t = now - raceStart;
-    // 카운트다운
-    if (t < 0) {
-      const n = Math.max(1, Math.ceil(-t / 1000));
-      if (st.lastCount !== n) { st.lastCount = n; k.show(st.count, true); st.count.replaceChildren(k.H('span', { class: 'num' }, String(n))); snd('countdown'); }
-    } else if (st.lastCount !== 0 && st.lastCount !== 'done') {
-      if (t < 900) { st.lastCount = 0; k.show(st.count, true); st.count.replaceChildren(k.H('span', { class: 'num go' }, '출발!')); snd('whoosh'); say(st, `출발! 마블 ${marbles.length}개가 한꺼번에 굴러가요.`); }
-      else st.lastCount = 'done';
-    } else if (st.lastCount === 0 && t >= 900) { st.lastCount = 'done'; }
-    if (st.lastCount === 'done' && !st.count.hidden) k.show(st.count, false);
-
-    const n = marbles.length;
-    marbles.forEach((m, i) => {
-      const e = st.els.get(m.id); if (!e) return;
-      const T = Math.max(1, n0(m.T));
-      let x, y, sc = 1;
-      if (t < 0) { const p0 = stagePos(i, n); x = p0.x; y = p0.y; sc = p0.s; }
-      else if (t >= T) {
-        const end = at(sm, 1, m.lane); const slot = slotPos(n0(m.place) || i + 1);
-        const f = clamp01((t - T) / 650); const ef = 1 - Math.pow(1 - f, 3);
-        x = end.x + (slot.x - end.x) * ef; y = end.y + (slot.y - end.y) * ef - Math.sin(f * Math.PI) * 18; sc = 0.95;
-        st.maxP.set(m.id, 1);
-      } else {
-        let p = rawP(m, t); const prev = st.maxP.get(m.id) || 0; if (p < prev) p = prev; else st.maxP.set(m.id, p);
-        const q = at(sm, p, m.lane);
-        if (t < 500) { const p0 = stagePos(i, n); const f = t / 500; x = p0.x + (q.x - p0.x) * f; y = p0.y + (q.y - p0.y) * f; sc = p0.s + (1 - p0.s) * f; }
-        else { x = q.x; y = q.y; }
-      }
-      if (Math.abs(x - e.x) > 0.05 || Math.abs(y - e.y) > 0.05 || sc !== e.s) { e.x = x; e.y = y; e.s = sc; e.g.setAttribute('transform', `translate(${x.toFixed(1)} ${y.toFixed(1)}) scale(${sc.toFixed(2)})`); }
-    });
-
-    // 순위·해설은 0.25초마다
-    if (now - st.lastSide < 250) { placeTags(st); return; }
-    st.lastSide = now;
-    const order = t < 0 ? [] : liveOrder(marbles, t, null).map(o => ({ ...o, p: o.done ? 1 : Math.max(o.p, st.maxP.get(o.marble.id) || 0) }));
-    if (t >= 0) order.sort((a, b) => (a.done !== b.done ? (a.done ? -1 : 1) : a.done ? a.place - b.place : b.p - a.p));
-    st.order = order;
-    const players = k.arr(s.players);
-    const avOf = id => { const p = players.find(x => x && x.id === id); return p ? p.avatar : null; };
-    st.topRows.forEach((row, i) => {
-      const o = order[i];
-      k.show(row.li, !!o);
-      if (!o) return;
-      if (row.owner !== o.owner) {
-        row.owner = o.owner; row.av.replaceChildren(avatarEl(avOf(o.owner), 34, o.nickname)); k.txt(row.nm, o.nickname || '');
-        if (!st.first) k.replay(row.li, 'swap');
-      }
-      k.txt(row.sub, o.done ? `${o.place}번째로 도착` : `달리는 중 ${Math.round(o.p * 100)}%`);
-      k.cls(row.li, 'done', o.done);
-    });
-    if (t < 0) { if (!st.flags.ready) { st.flags.ready = true; say(st, '마블들이 출발선에 모였어요. 곧 출발해요!'); } placeTags(st); return; }
-    const lead = order[0];
-    if (lead) {
-      if (st.leader !== lead.owner && !lead.done) {
-        if (st.leader && now - st.lastLeadAt > 1400 && t > 1500) say(st, `${lead.nickname}의 마블이 선두로 나섰어요!`);
-        st.leader = lead.owner; st.lastLeadAt = now;
-      }
-      if (!st.flags.half && lead.p >= 0.5 && !lead.done) { st.flags.half = true; say(st, '벌써 코스의 절반을 지났어요!'); }
-      if (!st.flags.near && lead.p >= 0.86 && !lead.done) { st.flags.near = true; say(st, '결승선이 눈앞이에요! 누가 먼저 들어올까요?'); }
-      if (!st.flags.win && lead.done) {
-        st.flags.win = true; st.leader = lead.owner;
-        say(st, `${lead.nickname}의 마블이 1등으로 도착했어요!` + (lead.gold ? ' 황금 마블의 힘!' : ''));
-        if (t - n0(lead.marble.T) < 4000) {
-          snd('cheer'); fx('confetti', { y: 0.85, count: 160 });
-          if (!k.reducedMotion()) fx('stamp', '우승!', { color: '#0aa3a3', sub: lead.nickname || '' });
-        }
-        st.banner.replaceChildren(k.H('span', { class: 'crown' }, k.crownSVG ? k.crownSVG() : ''), avatarEl(avOf(lead.owner), 44, lead.nickname), k.H('span', { class: 'txt' }, k.H('small', {}, '우승'), k.H('strong', {}, lead.nickname || '')));
-        k.show(st.banner, true);
-      }
-      const second = order[1];
-      if (!st.flags.second && second && second.done) { st.flags.second = true; say(st, `2등은 ${second.nickname}, 3등 자리를 두고 접전이에요!`); }
+    const s = st.s, w = st.world, t = now(), rs = N(s.raceStart, t);
+    if (t < rs) {
+      const n = Math.ceil((rs - t) / 1000);
+      if (st.cdN !== n) { st.cdN = n; st.cd.replaceChildren(el('small', null, st.map.name), el('b', null, String(n)), el('span', null, st.map.desc)); st.cd.className = 'ar-mb-cd on'; snd('countdown'); }
+    } else if (!st.started) {
+      st.started = true;
+      if (t - rs < 1500) { st.cd.className = 'ar-mb-cd go'; st.cd.replaceChildren(el('b', null, '출발!')); snd('whoosh'); setTimeout(() => { if (!st.dead) st.cd.className = 'ar-mb-cd'; }, 900); } else st.cd.className = 'ar-mb-cd';
     }
-    if (!st.flags.end && raceEnd && now >= raceEnd) { st.flags.end = true; say(st, '모든 마블이 도착했어요. 모두 수고했어요!'); }
-    placeTags(st);
+    const target = Math.max(0, Math.floor((t - rs) / 1000 * 60));
+    let budget = 900;
+    while (w.steps < target && !w.done && budget-- > 0) w.step();
+    const fl = w.finishList, catching = target - w.steps > 30;
+    if (fl.length > st.seenFin) {
+      if (!catching) for (let i = st.seenFin; i < fl.length; i++) { const b = st.byId.get(fl[i].id); if (b) burst(st, b.lastX !== undefined ? b.lastX : b.x, st.map.finishY, ownerColor(st, b.id)); }
+      st.seenFin = fl.length;
+      if (!catching && t - st.popAt > 140 && !w.done) { st.popAt = t; snd('pop'); }
+    }
+    for (const b of w.bodies) if (!b.finished) b.lastX = b.x;
+    camera(st);
+    draw(st);
+    if (t - (st.rankAt || 0) > 250) { st.rankAt = t; ranking(st); }
+    const end = N(s.raceEnd, rs + N(s.duration) * 1000);
+    if (!st.shown && w.done && t >= end - 200) showResult(st);
   }
-  function placeTags(st) {
-    const order = st.order || [];
-    st.tags.forEach((tg, i) => {
-      const o = order[i]; const e = o && st.els.get(o.marble.id);
-      if (!o || !e || o.done) { if (tg.g.getAttribute('opacity') !== '0') tg.g.setAttribute('opacity', '0'); return; }
-      const label = `${i + 1} ${o.nickname || ''}`;
-      if (tg.txt !== label) {
-        tg.txt = label; tg.t.textContent = label;
-        let w = 0; try { w = tg.t.getComputedTextLength(); } catch { w = label.length * 9; }
-        tg.w = w + 14; tg.b.setAttribute('width', tg.w.toFixed(0)); tg.b.setAttribute('x', (-tg.w / 2).toFixed(0)); tg.b.setAttribute('y', '-17'); tg.t.setAttribute('y', '-1');
+
+  function camera(st) {
+    const w = st.world, m = st.map, total = w.bodies.length || 1;
+    let n = 0, minY = Infinity, maxY = -Infinity;
+    const act = [];
+    for (const b of w.bodies) if (!b.finished) { n++; if (b.y < minY) minY = b.y; if (b.y > maxY) maxY = b.y; act.push(b); }
+    let ty, tz = 1, tx = m.w / 2;
+    if (!st.started) ty = 60;
+    else if (!n) ty = m.finishY + 120;
+    else {
+      const f = 1 - n / total, k = Math.min(1, Math.max(0, (f - 0.2) / 0.6));
+      const ys = act.map(b => b.y).sort((a, b) => a - b); const q = 0.75 - 0.75 * k;
+      ty = ys[Math.min(ys.length - 1, Math.floor(q * (ys.length - 1)))];
+      if (n <= 6) { act.sort((a, b) => a.y - b.y); const last = act.slice(0, Math.min(3, n)); ty = last.reduce((q, b) => q + b.y, 0) / last.length; tx = last.reduce((q, b) => q + b.x, 0) / last.length; tz = n <= 3 ? 1.6 : 1.3; }
+    }
+    const c = st.cam, sm = reduced() ? 1 : 0.08;
+    c.y += (ty - c.y) * sm; c.z += (tz - c.z) * 0.05; c.x += (tx - c.x) * 0.06;
+  }
+  function burst(st, x, y, color) { if (reduced()) return; for (let i = 0; i < 6; i++) { const a = -Math.random() * Math.PI; st.parts.push({ x, y, vx: Math.cos(a) * 120, vy: Math.sin(a) * 160, life: 0.6, color }); } if (st.parts.length > 300) st.parts.splice(0, st.parts.length - 300); }
+  function shade(hex) { let h = hex.slice(1); if (h.length === 3) h = h.split('').map(x => x + x).join(''); const n = parseInt(h.slice(0, 6), 16); const f = x => Math.round(x * 0.55); return 'rgb(' + f((n >> 16) & 255) + ',' + f((n >> 8) & 255) + ',' + f(n & 255) + ')'; }
+
+  function draw(st) {
+    const ctx = st.ctx, W0 = st.W, H0 = st.H, m = st.map, th = st.th, w = st.world, c = st.cam;
+    ctx.setTransform(st.dpr, 0, 0, st.dpr, 0, 0);
+    const g = ctx.createLinearGradient(0, 0, 0, H0); g.addColorStop(0, th.bg1); g.addColorStop(1, th.bg2); ctx.fillStyle = g; ctx.fillRect(0, 0, W0, H0);
+    const sc = W0 / m.w * c.z, viewH = H0 / sc, viewW = W0 / sc;
+    let top = c.y - viewH * 0.45; top = Math.max(-260, Math.min(m.h - viewH, top));
+    let left = c.x - viewW / 2; left = Math.max(0, Math.min(m.w - viewW, left));
+    ctx.setTransform(st.dpr * sc, 0, 0, st.dpr * sc, -left * sc * st.dpr, -top * sc * st.dpr);
+    if (m.id === 'space') { ctx.fillStyle = 'rgba(255,255,255,.6)'; for (let i = 0; i < 260; i++) { const x = (i * 97) % m.w, y = (i * 263) % m.h; if (y > top - 10 && y < top + viewH + 10) ctx.fillRect(x, y, 2, 2); } }
+    else { ctx.fillStyle = 'rgba(255,255,255,.05)'; for (let y = Math.floor(top / 200) * 200; y < top + viewH; y += 200) ctx.fillRect(0, y, m.w, 100); }
+    ctx.fillStyle = th.seg; ctx.globalAlpha = 0.4; ctx.fillRect(0, top - 10, 4, viewH + 20); ctx.fillRect(m.w - 4, top - 10, 4, viewH + 20); ctx.globalAlpha = 1;
+    ctx.lineCap = 'round';
+    for (const sg of m.segs) {
+      if (Math.max(sg[1], sg[3]) < top - 20 || Math.min(sg[1], sg[3]) > top + viewH + 20) continue;
+      ctx.strokeStyle = sg[4] === 'funnel' || sg[4] === 'split' ? th.accent : th.seg; ctx.lineWidth = 7;
+      ctx.beginPath(); ctx.moveTo(sg[0], sg[1]); ctx.lineTo(sg[2], sg[3]); ctx.stroke();
+    }
+    for (const p of m.pegs) {
+      if (p[1] < top - 30 || p[1] > top + viewH + 30) continue;
+      ctx.beginPath(); ctx.arc(p[0], p[1], p[2], 0, Math.PI * 2);
+      if (p[3] === 2) { ctx.fillStyle = th.bump; ctx.fill(); ctx.lineWidth = 4; ctx.strokeStyle = '#fff'; ctx.stroke(); ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(p[0], p[1], p[2] * 0.35, 0, Math.PI * 2); ctx.fill(); }
+      else { ctx.fillStyle = p[3] === 1 ? th.bump : th.peg; ctx.fill(); }
+    }
+    for (const r of m.rotors) {
+      if (r.cy + r.len < top - 20 || r.cy - r.len > top + viewH + 20) continue;
+      const base = w.rotorAngle(r);
+      ctx.strokeStyle = th.rotor; ctx.lineWidth = 8;
+      for (let a = 0; a < r.arms; a++) { const ang = base + a * Math.PI * 2 / r.arms; ctx.beginPath(); ctx.moveTo(r.cx, r.cy); ctx.lineTo(r.cx + Math.cos(ang) * r.len, r.cy + Math.sin(ang) * r.len); ctx.stroke(); }
+      ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(r.cx, r.cy, 8, 0, Math.PI * 2); ctx.fill();
+    }
+    const fy = m.finishY;
+    if (fy > top - 30 && fy < top + viewH + 30) {
+      for (let x = 0; x < m.w; x += 20) { const odd = ((x / 20) | 0) % 2; ctx.fillStyle = odd ? '#fff' : '#222'; ctx.fillRect(x, fy - 6, 20, 6); ctx.fillStyle = odd ? '#222' : '#fff'; ctx.fillRect(x, fy, 20, 6); }
+      ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fillRect(0, fy + 6, m.w, m.h - fy); ctx.fillStyle = '#fff'; ctx.font = 'bold 22px system-ui,sans-serif'; ctx.textAlign = 'center'; ctx.fillText('결승선', m.w / 2, fy - 14);
+    }
+    const active = []; let nAct = 0;
+    for (const b of w.bodies) {
+      if (!b.finished) nAct++;
+      if (b.y < top - 20 || b.y > top + viewH + 20 || b.x < left - 20 || b.x > left + viewW + 20) continue;
+      const col = ownerColor(st, b.id);
+      if (b.gold) { ctx.fillStyle = 'rgba(255,212,59,.45)'; ctx.beginPath(); ctx.arc(b.x, b.y, b.r + 4, 0, Math.PI * 2); ctx.fill(); }
+      const gg = ctx.createRadialGradient(b.x - 2, b.y - 3, 1, b.x, b.y, b.r);
+      gg.addColorStop(0, '#fff'); gg.addColorStop(0.35, b.gold ? '#ffe066' : col); gg.addColorStop(1, b.gold ? '#b8860b' : shade(col));
+      ctx.fillStyle = gg; ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2); ctx.fill();
+      ctx.lineWidth = 1.5; ctx.strokeStyle = b.gold ? '#fff3bf' : col; ctx.stroke();
+      if (!b.finished) active.push(b);
+    }
+    if (nAct && nAct <= 24) {
+      ctx.font = 'bold ' + Math.round(13 / c.z + 2) + 'px system-ui,sans-serif'; ctx.textAlign = 'center';
+      for (const b of active) { const inf = st.info.get(b.id); const nm = inf ? S(inf.nickname) : ''; const tw = ctx.measureText(nm).width + 10; ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(b.x - tw / 2, b.y - b.r - 24, tw, 17); ctx.fillStyle = '#fff'; ctx.fillText(nm, b.x, b.y - b.r - 11); }
+    }
+    const dt = 1 / 60;
+    st.parts = st.parts.filter(p => (p.life -= dt) > 0);
+    for (const p of st.parts) { p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 400 * dt; ctx.globalAlpha = Math.max(0, p.life / 0.6); ctx.fillStyle = p.color; ctx.fillRect(p.x - 2, p.y - 2, 4, 4); }
+    ctx.globalAlpha = 1;
+  }
+
+  function ranking(st) {
+    const rows = [];
+    for (const o of st.owners.values()) {
+      let rem = 0, minY = Infinity, lastT = 0;
+      for (const id of o.ids) { const b = st.byId.get(id); if (!b) continue; if (!b.finished) { rem++; if (b.y < minY) minY = b.y; } else if (N(b.finishT) > lastT) lastT = N(b.finishT); }
+      rows.push({ o, rem, minY, lastT });
+    }
+    rows.sort((a, b) => ((b.rem > 0) - (a.rem > 0)) || (a.rem > 0 ? a.minY - b.minY : b.lastT - a.lastT) || a.o.nickname.localeCompare(b.o.nickname, 'ko'));
+    const remOwners = rows.filter(r => r.rem > 0).length, remMarbles = rows.reduce((n, r) => n + r.rem, 0);
+    st.remain.textContent = st.started ? `남은 구슬 ${fmt(remMarbles)}개 · 학생 ${remOwners}명` : `구슬 ${fmt(st.world.bodies.length)}개 출발 준비`;
+    const top = rows.slice(0, 8);
+    const sig = top.map(r => r.o.id + ':' + r.rem).join('|') + st.started;
+    if (sig !== st.rankSig) {
+      st.rankSig = sig;
+      st.list.replaceChildren(...top.map((r, i) => {
+        const li = el('li', 'ar-mb-rrow' + (r.rem ? '' : ' done') + (i < 3 && st.started ? ' top' + (i + 1) : ''));
+        const pinfo = A(st.s.players).find(p => p.id === r.o.id) || { nickname: r.o.nickname };
+        const dot = el('span', 'ar-mb-rdot'); dot.style.background = r.o.color;
+        li.append(el('span', 'ar-mb-rn', String(i + 1)), avatarEl(pinfo, 26), el('span', 'ar-mb-rname', r.o.nickname), dot, el('span', 'ar-mb-rleft', r.rem ? `${r.rem}개 남음` : '모두 도착'));
+        return li;
+      }));
+    }
+    if (st.started && !st.world.done) {
+      const tense = remOwners <= 1 ? 1 : remOwners <= 3 ? 3 : 0;
+      if (tense && tense !== st.tense) {
+        st.tense = tense;
+        st.banner.textContent = tense === 1 ? '마지막 한 명! 끝까지 버텨라!' : '마지막 3명! 가장 늦게 들어오면 1등!';
+        K().replay(st.banner, 'show'); snd('drumroll'); st.stage.classList.add('tense');
       }
-      tg.g.setAttribute('opacity', '1');
-      tg.g.setAttribute('transform', `translate(${e.x.toFixed(1)} ${(e.y - 16 - i * 2).toFixed(1)})`);
-    });
+    }
+  }
+
+  function showResult(st) {
+    st.shown = true; st.stage.classList.remove('tense');
+    const s = st.s, order = A(s.order).slice().sort((a, b) => N(a.place) - N(b.place)).slice(0, 3), bonus = s.bonus || {};
+    if (!order.length) return;
+    const box = el('div', 'ar-mb-rbox');
+    box.append(el('h2', null, '레이스 결과'), el('p', null, '가장 늦게 들어온 구슬이 1등!'));
+    const row = el('div', 'ar-mb-rpods');
+    for (const pl of [2, 1, 3]) {
+      const o = order.find(x => N(x.place) === pl); if (!o) continue;
+      const pod = el('div', 'ar-mb-rpod p' + pl); pod.style.animationDelay = (pl === 3 ? 0 : pl === 2 ? 0.5 : 1) + 's';
+      pod.append(el('b', 'ar-mb-rplace', pl + '등'), avatarEl(o, pl === 1 ? 84 : 64), el('span', 'ar-mb-rpname', S(o.nickname)), el('span', 'ar-mb-rbonus', '+' + fmt(bonus[pl] || 0) + '점'));
+      row.append(pod);
+    }
+    box.append(row); st.result.replaceChildren(box); st.result.hidden = false;
+    setTimeout(() => { if (!st.dead) { fx('confetti', { count: 160, power: 1.2 }); snd('fanfare'); } }, 1100);
   }
 
   function host(root, v) {
-    const s = K().ms(v);
-    if (s.stage === 'race' && Array.isArray(s.marbles) && s.marbles.length) hostRace(root, v);
-    else if (s.stage === 'race') {
-      const k = K();
-      k.prep(root, 'marble-host-nomarble', ['ar-marble-host', 'ar-marble-collect'], (st, r) => r.append(k.H('div', { class: 'ar-marble-empty' }, k.H('strong', {}, '마블이 하나도 없어요'), k.H('span', {}, '다음 게임에서는 정답으로 마블을 모아 봐요!'))));
-    } else hostCollect(root, v);
+    if (!root) return;
+    if (v && (v.phase === 'running' || v.phase === 'finished') && isRace(v)) return hostRace(root, v);
+    return hostCollect(root, v);
   }
 
-  // =====================================================================
-  // 학생
-  // =====================================================================
-  function playerCollect(root, v) {
-    const k = K(); const { H } = k; const me = k.meOf(v) || {}; const stt = me.stats || {};
-    const st = k.prep(root, 'marble-player-collect', ['ar-marble-player', 'ar-marble-pstrip'], (st, r) => {
-      st.tray = H('div', { class: 'ar-marble-tray', 'aria-hidden': 'true' });
-      st.cnt = H('strong', {}, '0');
-      st.gold = H('span', { class: 'ar-marble-pgold' }, '');
-      st.hint = H('span', { class: 'ar-marble-phint' }, '');
-      r.append(H('div', { class: 'ar-marble-pbox' }, st.tray, H('div', { class: 'ar-marble-ptext' }, H('span', { class: 'ar-marble-pline' }, '내 마블 ', st.cnt, '개'), st.gold, st.hint)));
-      st.c = -1; st.g = -1;
+  // ======================= 학생 =======================
+  function myMarbles(v) { const s = msOf(v), me = meOf(v); if (!me) return { m: 0, g: 0 }; const p = A(s.players).find(x => x.id === me.id); return p ? { m: N(p.marbles), g: N(p.gold), color: p.color } : { m: N(me.stats && me.stats.marbles), g: N(me.stats && me.stats.gold) }; }
+  function playerStrip(root, v) {
+    const k = K();
+    const st = k.prep(root, 'ar-mb-pstrip', ['ar-mb', 'ar-mb-pstrip'], (st, r) => {
+      st.dots = el('div', 'ar-mb-pdots'); st.n = el('b', null, '0'); st.g = el('span', 'ar-mb-pg', '');
+      const t = el('div', 'ar-mb-ptext'); const l1 = el('div', 'ar-mb-pl1'); l1.append('내 구슬 ', st.n, '개'); t.append(l1, st.g, el('small', null, '마지막 레이스는 늦게 들어올수록 1등! 빨리 맞히면 조금 느린 황금 구슬'));
+      r.append(st.dots, t); st.last = -1;
     });
-    const c = n0(stt.marbles), g = Math.min(c, n0(stt.gold));
-    const col = colorOk((k.arr(k.ms(v).players).find(p => p && me && p.id === me.id) || {}).color || '#0aa3a3');
-    if (c !== st.c || g !== st.g) {
-      const add = st.c >= 0 ? c - st.c : 0;
-      st.tray.replaceChildren(...Array.from({ length: 12 }, (_, i) => {
-        if (i >= c) return H('span', { class: 'ar-marble-dot empty' });
-        const d = dot(col, i < g);
-        if (add > 0 && i >= c - add) d.classList.add('pop');
-        return d;
-      }));
-      if (add > 0) snd('pop');
-      st.c = c; st.g = g;
+    const { m, g, color } = myMarbles(v);
+    if (m !== st.last) {
+      const grew = st.last >= 0 && m > st.last; st.last = m; st.n.textContent = fmt(m); st.g.textContent = g ? `황금 구슬 ${g}개` : '';
+      const show = Math.min(m, 18);
+      st.dots.replaceChildren(...Array.from({ length: Math.max(show, 1) }, (_, i) => { const d = el('span', 'ar-mb-dot' + (show === 0 ? ' empty' : i < g ? ' gold' : '') + (grew && i === show - 1 ? ' pop' : '')); d.style.setProperty('--c', safeColor(color)); return d; }));
+      if (grew) k.replay(st.n, 'bump');
     }
-    k.txt(st.cnt, String(c));
-    k.txt(st.gold, g ? `그중 황금 마블 ${g}개` : '');
-    k.txt(st.hint, v.phase === 'finished' ? '마블 모으기가 끝났어요.' : c >= 12 ? '주머니가 가득! 이제 정답은 황금 마블로 바뀌어요.' : '정답을 맞힐 때마다 마블 +1, 빨리 맞히면 황금!');
   }
-
   function playerRace(root, v) {
-    const k = K(); const { H } = k; const s = k.ms(v); const me = k.meOf(v) || {};
-    const marbles = k.arr(s.marbles).filter(m => m && m.id);
-    const mine = marbles.filter(m => m.owner === me.id);
-    const st = k.prep(root, 'marble-player-race:' + n0(s.raceStart) + ':' + marbles.length, ['ar-marble-player', 'ar-marble-prace'], (st, r) => {
-      st.h = H('h2', {}, '큰 화면을 보세요!');
-      st.sub = H('p', { class: 'ar-marble-psub' }, '');
-      st.place = H('div', { class: 'ar-marble-pplace' }, '');
-      st.bar = H('div', { class: 'ar-marble-pbar' });
-      st.me = dot('#0aa3a3', false, 'me');
-      st.bar.append(H('span', { class: 'ar-marble-pflag' }), st.me);
-      st.note = H('p', { class: 'ar-marble-pnote' }, '');
-      r.append(H('div', { class: 'ar-marble-pcard' }, st.h, st.sub, st.place, st.bar, st.note));
-      st.maxP = new Map(); st.done = false; st.lastP = -1;
-      const loop = () => { if (st.dead) return; try { tickP(st); } catch {} st.raf = requestAnimationFrame(loop); };
+    const k = K(); const s = msOf(v), me = meOf(v);
+    const st = k.prep(root, 'ar-mb-prace-' + s.seed, ['ar-mb', 'ar-mb-prace'], (st, r) => {
+      st.h = el('h2', null, '큰 화면을 보세요!'); st.sub = el('p', 'ar-mb-psub', ''); st.big = el('div', 'ar-mb-pbig', ''); st.note = el('p', 'ar-mb-pnote', '');
+      st.bar = el('div', 'ar-mb-pbar'); st.fill = el('i'); st.bar.append(st.fill);
+      r.append(st.h, st.sub, st.big, st.bar, st.note); st.root = r;
+      const loop = () => { if (st.dead) return; try { tick(st); } catch { /* 무시 */ } st.raf = requestAnimationFrame(loop); };
       st.raf = requestAnimationFrame(loop);
     });
-    st.marbles = marbles; st.mine = mine; st.s = s; st.me = st.me; st.meId = me.id;
-    if (mine.length) { const best = mine.slice().sort((a, b) => n0(a.T) - n0(b.T))[0]; st.me.style.setProperty('--c', colorOk(best.color)); k.cls(st.me, 'gold', !!best.gold); }
+    st.s = s; st.me = me;
   }
-  function tickP(st) {
-    const k = K(); const s = st.s || {}; const now = nowMs();
-    const t = now - n0(s.raceStart);
-    const total = new Set(st.marbles.map(m => m.owner)).size;
-    if (!st.mine.length) {
-      k.txt(st.sub, '이번 레이스에는 내 마블이 없어요.'); k.txt(st.place, '친구들을 응원해요!'); k.show(st.bar, false);
-      k.txt(st.note, `마블 ${st.marbles.length}개가 달리고 있어요.`); return;
+  function tick(st) {
+    const s = st.s, me = st.me; if (!me) return;
+    const t = now(), rs = N(s.raceStart, t), end = N(s.raceEnd, rs + N(s.duration) * 1000);
+    if (!st.mine) { st.mine = new Set(A(s.marbles).filter(m => m.owner === me.id).map(m => S(m.id))); st.ownerOf = new Map(A(s.marbles).map(m => [S(m.id), m.owner])); }
+    const mine = st.mine, fin = A(s.finish), el2 = (t - rs) / 1000, total = mine.size;
+    if (t < rs) { st.sub.textContent = `내 구슬 ${total}개가 출발선에 있어요`; st.big.textContent = String(Math.ceil((rs - t) / 1000)); st.note.textContent = '가장 늦게 들어오는 구슬이 1등이에요!'; st.fill.style.width = '0%'; return; }
+    if (t < end) {
+      if (t - (st.at || 0) < 200) return; st.at = t;
+      let arrived = 0; const rest = new Set();
+      for (const f of fin) { if (N(f.t) <= el2) { if (mine.has(S(f.id))) arrived++; } else rest.add(st.ownerOf.get(S(f.id))); }
+      const left = total - arrived;
+      st.sub.textContent = total ? `내 구슬 ${total}개 중` : '이번 레이스에는 내 구슬이 없어요';
+      st.big.textContent = total ? (left ? `${left}개 굴러가는 중` : '모두 도착!') : '응원해요!';
+      st.note.textContent = `아직 굴러가는 학생 ${rest.size}명`;
+      st.fill.style.width = (total ? arrived / total * 100 : 100).toFixed(0) + '%';
+      if (st.prevLeft !== undefined && left < st.prevLeft) { try { navigator.vibrate && navigator.vibrate(30); } catch { /* 무시 */ } }
+      st.prevLeft = left; return;
     }
-    if (t < 0) {
-      k.txt(st.sub, `내 마블 ${st.mine.length}개가 출발선에 있어요.`); k.txt(st.place, `${Math.max(1, Math.ceil(-t / 1000))}초 뒤 출발!`); k.txt(st.note, '마블이 많을수록 우승 기회가 커요.');
-      st.me.style.left = '0%'; return;
-    }
-    if (now - (st.lastCalc || 0) < 200) return;
-    st.lastCalc = now;
-    const order = liveOrder(st.marbles, t, st.maxP);
-    const idx = order.findIndex(o => o.owner === st.meId);
-    const mine = order[idx];
-    const p = mine ? (mine.done ? 1 : mine.p) : 0;
-    st.me.style.left = (p * 100).toFixed(1) + '%';
-    const allDone = n0(s.raceEnd) && now >= n0(s.raceEnd);
-    if (mine && mine.done) {
-      k.txt(st.place, (allDone ? '최종 ' : '') + `${idx + 1}위` + (idx === 0 ? '! 우승이에요!' : '!'));
-      k.txt(st.sub, allDone ? '레이스가 끝났어요.' : '내 마블이 결승선에 들어왔어요!');
-      k.txt(st.note, `가장 빠른 내 마블은 ${mine.place}번째로 도착했어요.`);
-      if (!st.done) { st.done = true; snd(idx === 0 ? 'cheer' : 'levelup'); if (idx === 0) fx('confetti', { y: 0.8, count: 140 }); }
-    } else {
-      k.txt(st.place, `지금 ${idx + 1}위 / ${total}명`);
-      k.txt(st.sub, `내 마블 ${st.mine.length}개가 달리는 중`);
-      k.txt(st.note, idx === 0 ? '내 마블이 선두예요!' : idx < 3 ? '선두권이에요! 조금만 더!' : '아직 몰라요. 끝까지 응원해요!');
-    }
-    k.cls(st.place, 'top', idx === 0);
+    if (st.doneShown) return; st.doneShown = true;
+    const o = A(s.order).find(x => x.id === me.id), pl = o ? N(o.place) : 0, b = (s.bonus || {})[pl];
+    st.h.textContent = '레이스 끝!';
+    st.sub.textContent = pl ? '내 레이스 등수' : '';
+    st.big.textContent = pl ? pl + '등' : '수고했어요';
+    st.note.textContent = pl && pl <= 3 && b ? `추가 점수 +${fmt(b)}점!` : '가장 늦게 들어온 구슬이 1등이에요.';
+    st.fill.style.width = '100%';
+    if (pl && pl <= 3) { st.root.classList.add('win'); fx('confetti', { count: 120 }); snd('fanfare'); }
   }
-
   function player(root, v) {
-    const s = K().ms(v);
-    if (s.stage === 'race') playerRace(root, v); else playerCollect(root, v);
+    if (!root) return;
+    if (v && v.phase === 'running' && isRace(v)) return playerRace(root, v);
+    return playerStrip(root, v);
   }
-
-  KQ.arena.marble = {
-    host(root, view, send) { try { host(root, view || {}, send); } catch (e) { console.warn('[마블 레이스] 진행자 화면 오류', e); } },
-    player(root, view, send) { try { player(root, view || {}, send); } catch (e) { console.warn('[마블 레이스] 학생 화면 오류', e); } }
-  };
+  KQ.arena.marble = { host, player };
 })();

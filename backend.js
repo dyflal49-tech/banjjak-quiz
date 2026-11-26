@@ -190,7 +190,7 @@
   function restore(s) {
     const g = { ...s, players: new Map(s.players.map(p => [p.id, p])), kicked: new Set(s.kicked), answers: new Map(s.answers.map(a => [a.playerId, a])), clients: new Set(), timer: null, autoTimer: null, touched: Date.now() };
     if (!g.options || g.options.autoAdvance === undefined) g.options = { ...(g.options || {}), autoAdvance: 0 };
-    for (const p of g.players.values()) if (p.finishedRank === undefined) p.finishedRank = null;
+    for (const p of g.players.values()) { if (p.finishedRank === undefined) p.finishedRank = null; p.seenAt = Date.now(); }
     delete g.lastTs; delete g.processed;
     E.games.set(g.pin, g);
     const left = Math.max(0, (g.endsAt || 0) - Date.now());
@@ -200,7 +200,7 @@
     else if (['reveal', 'leaderboard'].includes(g.phase) && s.autoAt) E.scheduleAuto(g, s.autoAt - Date.now());
     return g;
   }
-  const MINI_KINDS = ['move', 'pick', 'deliver', 'mhit'];
+  const MINI_KINDS = ['move', 'pick', 'deliver', 'mhit', 'ping', 'leave'];
   async function fire(pin, payload) {
     await ready; await waitUser();
     if (!uid()) throw friendly(authError || { code: 'auth/operation-not-allowed' });
@@ -214,11 +214,13 @@
     try {
       if (!u) fail(400, '잘못된 요청이에요.');
       if (d.type === 'join') {
-        const p = E.joinGame(g, u, d.nickname, d.avatar); p.conns = 1;
+        const p = E.joinGame(g, u, d.nickname, d.avatar, d.rejoin); p.conns = 1;
         reply = { ok: true, body: { me: { id: p.id, nickname: p.nickname, team: p.team, teamName: g.teams ? g.teams[p.team].name : null, avatar: p.avatar || null } } };
       } else {
         const p = [...g.players.values()].find(x => x.deviceKey === u);
         if (!p) fail(403, g.kicked.has(u) ? '진행자가 이 기기를 게임에서 내보냈어요.' : '먼저 게임에 참가하세요.');
+        E.seenPlayer(g, p, d.type === 'action' ? d.kind : d.type);
+        if (d.type === 'action' && (d.kind === 'ping' || d.kind === 'leave')) { const ms1 = d.at && d.at.toMillis ? d.at.toMillis() : 0; if (ms1 > h.lastTs) h.lastTs = ms1; return; }
         if (d.type === 'answer') { const r = E.submitAnswer(g, p, String(d.questionId || ''), d.answer); reply = { ok: true, body: { ok: true, ...r } }; }
         else if (d.type === 'action' && MINI_KINDS.includes(d.kind)) {
           E.miniAction(g, p, d.kind, d.target);
@@ -266,6 +268,7 @@
       let changed = false;
       for (const p of g.players.values()) if (p.lockedUntil && p.lockedUntil <= Date.now()) { p.lockedUntil = null; changed = true; }
       if (changed) E.HOOKS.touch(g);
+      if (g.phase === 'lobby' && Date.now() - (h.sweepAt || 0) > 3000) { h.sweepAt = Date.now(); E.sweepLobby(g, 40000); }
     }, 500);
     flush(h);
     return h;
@@ -344,7 +347,7 @@
       kicked: !!(pd && pd.kicked), endsAt: gd.endsAt, autoAt: gd.autoAt || null, modeState: gd.modeState || {}, me,
       question: fresh ? pd.question : null, answered: fresh ? !!pd.answered : false, lockedUntil: pd ? pd.lockedUntil : null,
       result: fresh || gd.pacing === 'player' ? (pd && pd.result) || null : null, actions: fresh ? pd.actions : null, questionStartedAt: pd ? pd.questionStartedAt : null,
-      leaderboard: gd.mode === 'classic' && ['leaderboard', 'finished'].includes(gd.phase) ? gd.leaderboard || [] : [], podium: gd.phase === 'finished' ? gd.podium || [] : []
+      leaderboard: (gd.mode === 'classic' || gd.mode === 'marble') && ['leaderboard', 'finished'].includes(gd.phase) ? gd.leaderboard || [] : [], podium: gd.phase === 'finished' ? gd.podium || [] : []
     };
   }
 
@@ -490,7 +493,7 @@
         else fail(400, '알 수 없는 진행 명령이에요.');
         flush(h); return { ok: true, phase: g.phase };
       }
-      if (action === 'join') return request(pin, 'join', { nickname: E.clean(d && d.nickname, 15), avatar: E.normAvatar(d && d.avatar) });
+      if (action === 'join') return request(pin, 'join', { nickname: E.clean(d && d.nickname, 15), avatar: E.normAvatar(d && d.avatar), rejoin: d && typeof d.rejoin === 'string' ? d.rejoin.slice(0, 64) : undefined });
       if (action === 'answer') return request(pin, 'answer', { questionId: String(d.questionId || ''), answer: d.answer === undefined ? null : d.answer });
       if (action === 'action' && MINI_KINDS.includes(String(d.kind))) return fire(pin, { kind: String(d.kind), target: d.target === undefined ? null : d.target });
       if (action === 'action') return request(pin, 'action', { kind: String(d.kind || ''), target: d.target === undefined ? null : d.target });

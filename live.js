@@ -30,7 +30,7 @@
     { id: 'garden', color: '#2f8f2f', name: '우리반 꽃밭', pacing: 'host', teams: false, original: true, description: '정답마다 꽃이 피어 함께 꽃밭을 채워요.' },
     { id: 'boss', color: '#7a1fa2', name: '보스 레이드', pacing: 'host', teams: false, original: true, description: '모두의 정답으로 거대한 보스를 물리쳐요.' },
     { id: 'robot', color: '#0aa3a3', name: '로봇 경주', pacing: 'player', teams: false, original: false, description: '각자 문제를 풀며 로봇을 결승선까지 달리게 해요.' },
-    { id: 'marble', color: '#c2410c', name: '마블 레이스', pacing: 'player', teams: false, original: false, description: '정답을 맞힐수록 구슬이 빠르게 굴러가요.' },
+    { id: 'marble', color: '#c2410c', name: '마블 레이스', pacing: 'host', teams: false, original: false, description: '정답을 맞힐수록 구슬이 빠르게 굴러가요.' },
     { id: 'runner', color: '#ff6b00', name: '퀴즈 런', pacing: 'player', teams: false, original: true, description: '장애물을 피해 달리며 정답 문으로 골인해요.' },
     { id: 'treasure', color: '#b37f00', name: '행운의 보물상자', pacing: 'player', teams: false, original: true, description: '정답을 맞히면 보물상자를 골라 행운을 시험해요.' }
   ];
@@ -356,9 +356,19 @@
       modeCall(m, 'renderPlayer', panel, v, sendAction);
     }
 
+    let pingT = null;
+    const fireAct = kind => { try { KQ.api(`/api/games/${encodeURIComponent(pin)}/action`, 'POST', { kind }).catch(() => {}); } catch { /* 무시 */ } };
+    function syncPing(v) {
+      const want = !ended && v && v.phase === 'lobby' && v.me && !v.kicked;
+      if (want && !pingT) { fireAct('ping'); pingT = setInterval(() => { if (ended || !view || view.phase !== 'lobby') { clearInterval(pingT); pingT = null; return; } fireAct('ping'); }, 15000); }
+      if (!want && pingT) { clearInterval(pingT); pingT = null; }
+    }
+    const onHide = () => { if (view && view.phase === 'lobby' && view.me && !ended) fireAct('leave'); };
+    window.addEventListener('pagehide', onHide);
     function apply(v) {
       if (ended) return;
       view = v;
+      syncPing(v);
       if (v.kicked) {
         renderPanel(v); bar.hidden = true;
         if (sig !== 'kicked') setScreen('kicked', { node: msgNode('진행자가 게임에서 내보냈어요', '궁금한 점은 선생님께 여쭤보세요.', true), bg: 'lv-bg-purple' });
@@ -410,7 +420,18 @@
     }
 
     // --- 닉네임 + 캐릭터 ---
+    const rjKey = 'kq-rejoin-' + pin;
+    function rejoinInfo() { try { const o = JSON.parse(localStorage.getItem(rjKey) || 'null'); return o && o.t ? o : null; } catch { return null; } }
+    function rejoinToken() { let o = rejoinInfo(); if (!o) { const a = new Uint8Array(16); crypto.getRandomValues(a); o = { t: Array.from(a, x => x.toString(16).padStart(2, '0')).join('') }; } return o; }
+    let autoTried = false;
+    function tryAutoRejoin(v) {
+      if (autoTried) return; autoTried = true;
+      const o = rejoinInfo(); if (!o || !o.nick) return;
+      const body = { nickname: o.nick, rejoin: o.t }; if (o.av) body.avatar = o.av;
+      KQ.api(`/api/games/${encodeURIComponent(pin)}/join`, 'POST', body).then(() => KQ.toast('다시 들어왔어요! 점수와 캐릭터가 그대로예요.')).catch(() => { /* 새로 입장 화면 */ });
+    }
     function joinScreen(v) {
+      tryAutoRejoin(v);
       const err = el('p', { class: 'lv-form-error', role: 'alert' });
       const input = el('input', { class: 'input big', id: 'lv-nick', type: 'text', maxlength: 15, autocomplete: 'off', placeholder: '닉네임', 'aria-describedby': 'lv-nick-help' });
       input.addEventListener('input', () => { err.textContent = ''; });
@@ -438,8 +459,10 @@
         okBtn.disabled = true; randomBtn.disabled = true;
         if (curAv && KQ.avatar && typeof KQ.avatar.save === 'function') { try { KQ.avatar.save(curAv); } catch { /* 무시 */ } }
         try {
-          const body = { nickname: nick };
+          const rj = rejoinToken();
+          const body = { nickname: nick, rejoin: rj.t };
           if (curAv) body.avatar = curAv;
+          try { localStorage.setItem(rjKey, JSON.stringify({ t: rj.t, nick, av: curAv || null, at: Date.now() })); } catch { /* 무시 */ }
           const r = await KQ.api(`/api/games/${encodeURIComponent(pin)}/join`, 'POST', body);
           if (r.me) {
             autoNamed = !!(r.me.nickname && r.me.nickname !== nick);
@@ -535,7 +558,7 @@
         if (n !== lastN) { lastN = n; const s = el('span', { class: 'lv-count-num' }, String(n)); big.replaceChildren(s); }
       };
       tick(v);
-      const how = TUTOR.has(v.mode) ? howToOf(v.mode) : [];
+      const how = TUTOR.has(v.mode) && (v.pacing === 'player' || !(v.questionIndex > 0)) ? howToOf(v.mode) : [];
       return { node: el('div', { class: 'lv-center-msg' }, el('p', { class: 'lv-lead' }, v.quizTitle || ''), big, el('h1', {}, '준비!'), how.length ? el('ol', { class: 'lv-howto-mini' }, how.map(t => el('li', {}, t))) : null), bg: 'lv-bg-purple', tick, update: tick };
     }
 
@@ -766,7 +789,7 @@
       shell.classList.toggle('lv-offline', conn === 'reconnecting');
     });
     KQ.onLeave(() => {
-      ended = true;
+      ended = true; try { clearInterval(pingT); window.removeEventListener('pagehide', onHide); } catch { /* 무시 */ }
       clearInterval(timer); clearTimeout(flashTimer); stream.close();
       while (pTimers.length) clearTimeout(pTimers.pop());
       if (panelOn) modeCall(m, 'dispose', panel);
@@ -965,7 +988,11 @@
     function syncBgm(v, force) {
       if (!v || ended || !KQ.bgm || !bgmOn()) return;
       if (v.phase === 'finished') { if (force && podiumStarted) bgmCall('play', 'podium'); return; } // 시상식 음악은 단상 등장 뒤에
-      bgmCall('play', v.phase === 'lobby' ? 'lobby' : (v.mode || 'classic'));
+      let track = v.phase === 'lobby' ? 'lobby' : (v.mode || 'classic');
+      const s = v.modeState || {};
+      if (v.mode === 'robot' && s.part === 'mini' && s.mini) track = 'mission';
+      if (v.mode === 'marble' && s.stage === 'race') { try { const mp = window.KQMarble && KQMarble.MAPS.find(x => x.id === s.mapId); track = (mp && mp.bgm) || 'race0'; } catch { track = 'race0'; } }
+      bgmCall('play', track);
     }
     function toggleMusic() {
       if (!KQ.bgm || typeof KQ.bgm.toggle !== 'function') { KQ.toast('배경음악을 불러오지 못했어요.', true); return; }
@@ -1374,7 +1401,7 @@
         const n = Math.max(1, KQ.secondsLeft(vv.endsAt) || 1);
         if (n !== lastN) { lastN = n; big.replaceChildren(el('span', { class: 'lv-hcount-num' }, String(n))); KQ.sound.play('countdown'); }
       };
-      const how = TUTOR.has(v.mode) ? howToOf(v.mode) : [];
+      const how = TUTOR.has(v.mode) && (v.pacing === 'player' || !(v.questionIndex > 0)) ? howToOf(v.mode) : [];
       const cdTotal = v.mode === 'runner' ? 12000 : 9000;
       const steps = how.map((t, i) => el('li', { class: 'lv-howto-step' }, el('span', { class: 'lv-howto-num' }, String(i + 1)), el('span', {}, t)));
       const tick0 = tick;

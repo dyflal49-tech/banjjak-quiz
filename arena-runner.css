@@ -124,3 +124,24 @@
 .ar-runner-zoom img{max-width:96%;max-height:84%;object-fit:contain;border-radius:12px;background:#fff;box-shadow:0 10px 40px rgba(0,0,0,.5)}
 .ar-runner-zoom span{color:#fff;font-weight:800;font-size:14px;opacity:.85}
 @media (max-width:520px){.ar-runner-qimg{max-height:18vh;max-width:30vw}}
+
+/* v7: 맵과 보스 */
+.ar-runner-chip.map{color:#fff;font-weight:900}
+.ar-runner-bossbar{position:absolute;left:8px;z-index:3;display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;max-width:min(440px,calc(100% - 16px));background:rgba(30,6,20,.86);color:#fff;border:3px solid #ff6b6b;border-radius:12px;padding:6px 10px;box-shadow:0 4px 0 rgba(0,0,0,.3);pointer-events:none}
+.ar-runner-bossbar[hidden]{display:none}
+.ar-runner-bossbar b{font-size:15px;color:#ffd43b}
+.ar-runner-bossbar small{flex-basis:100%;font-size:12px;opacity:.9}
+.ar-runner-bcells{display:flex;gap:3px}
+.ar-runner-bcells i{width:20px;height:12px;border-radius:3px;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.35)}
+.ar-runner-bcells i.on{background:linear-gradient(#ff8787,#e03131);border-color:#ffc9c9}
+.ar-runner-bossbar.hit{animation:ar-runner-bhit .45s}
+.ar-runner-bossbar.dead{border-color:#ffd43b;background:rgba(80,50,0,.88)}
+@keyframes ar-runner-bhit{0%,100%{transform:none}25%{transform:translateX(-6px)}50%{transform:translateX(6px)}75%{transform:translateX(-3px)}}
+.ar-runner-mapban{position:absolute;left:50%;top:42%;z-index:6;transform:translate(-50%,-50%) scale(.6);opacity:0;pointer-events:none;text-align:center;display:flex;flex-direction:column;align-items:center;gap:4px;width:min(92%,640px)}
+.ar-runner-mapban small{background:#fff;color:var(--mc,#7048e8);font-weight:900;border-radius:999px;padding:2px 12px;font-size:14px}
+.ar-runner-mapban strong{font-size:clamp(30px,7vw,64px);font-weight:900;color:#fff;-webkit-text-stroke:2px rgba(0,0,0,.5);paint-order:stroke;text-shadow:0 6px 0 var(--mc,#7048e8),0 10px 24px rgba(0,0,0,.5)}
+.ar-runner-mapban span{background:rgba(0,0,0,.6);color:#fff;font-weight:800;border-radius:12px;padding:6px 14px;font-size:clamp(13px,2.6vw,18px);line-height:1.35}
+.ar-runner-mapban.show{animation:ar-runner-mapban 2.8s cubic-bezier(.2,1.4,.4,1) forwards}
+@keyframes ar-runner-mapban{0%{opacity:0;transform:translate(-50%,-50%) scale(.5)}12%{opacity:1;transform:translate(-50%,-50%) scale(1.06)}20%{transform:translate(-50%,-50%) scale(1)}82%{opacity:1;transform:translate(-50%,-50%) scale(1)}100%{opacity:0;transform:translate(-50%,-60%) scale(.95)}}
+.ar-runner-mapchip{color:#fff;font-size:11px;font-weight:900;border-radius:999px;padding:1px 7px;margin-left:4px;white-space:nowrap}
+@media (prefers-reduced-motion:reduce){.ar-runner-mapban.show{animation:none;opacity:1;transform:translate(-50%,-50%)}.ar-runner-bossbar.hit{animation:none}}
