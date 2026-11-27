@@ -746,3 +746,49 @@
 .lv-player[data-phase="question"] .ar-o-gpnum{font-size:clamp(17px,3dvh,22px)}
 .lv-player[data-phase="question"] .ar-o-bpface{width:42px;height:42px}
 @media(max-height:680px){.lv-player[data-phase="question"] .lv-mode-panel,.lv-player[data-phase="reveal"] .lv-mode-panel{max-height:20dvh}}
+
+
+/* ===== v11: 학생 종료 화면(결과 숨김) ===== */
+.lv-fin-hidden{gap:12px}
+.lv-fin-nick{font-size:clamp(24px,6vw,40px);margin:0;overflow-wrap:anywhere}
+.lv-fin-look{display:flex;flex-direction:column;align-items:center;gap:6px;background:rgba(255,255,255,.14);border:2px solid rgba(255,255,255,.35);border-radius:16px;padding:14px 18px;max-width:420px}
+.lv-fin-look p{margin:0;font-weight:900;font-size:clamp(17px,4.4vw,22px)}
+.lv-fin-look small{opacity:.85;font-weight:700}
+.lv-fin-look-icon{width:64px;height:40px;border:5px solid #fff;border-radius:6px;position:relative;margin-bottom:8px;box-shadow:0 0 0 4px rgba(255,212,59,.5);animation:kq-float 2s ease-in-out infinite}
+.lv-fin-look-icon::after{content:"";position:absolute;left:50%;bottom:-13px;width:24px;height:6px;margin-left:-12px;background:#fff;border-radius:3px}
+/* ===== v11: 반복 모드 남은 게임 시간 ===== */
+.lv-hfoot-clock{background:#fff;color:var(--ink);border-radius:999px;padding:1px 12px;font-variant-numeric:tabular-nums}
+.lv-hfoot-clock.hurry{background:#ffd43b;animation:lv-pulse .6s ease-in-out infinite alternate}
+.lv-hfoot-clock[hidden]{display:none}
+/* ===== v11: 시상대 - 호명 목소리와 동시에 캐릭터 등장 ===== */
+.lv-pod-seq .lv-pod-who{opacity:0;animation:none;transform:translateY(40px) scale(.5)}
+.lv-pod-seq .lv-pod-who.lv-pod-in{animation:lv-pod-pop .6s cubic-bezier(.2,1.6,.4,1) both}
+@keyframes lv-pod-pop{0%{opacity:0;transform:translateY(40px) scale(.5)}60%{opacity:1;transform:translateY(-10px) scale(1.12)}100%{opacity:1;transform:none}}
+.lv-pod-seq .lv-pod-crown{opacity:0;animation:none}
+.lv-pod-seq .lv-pod-in .lv-pod-crown{animation:lv-crown-drop .7s cubic-bezier(.2,1.6,.4,1) .35s both}
+.lv-pod-seq .lv-pod-1 .lv-pod-av{animation:none}
+.lv-pod-seq .lv-pod-1 .lv-pod-in .lv-pod-av{animation:lv-crown-glow 1.3s ease-in-out .8s infinite alternate}
+.lv-pod-seq .lv-pod-rest{visibility:hidden}
+.lv-pod-seq.lv-rest-in .lv-pod-rest{visibility:visible}
+.lv-pod-seq.lv-rest-in .lv-pod-rest li{animation-delay:0s!important}
+.lv-pod-seq.lv-rest-in .lv-pod-rest li:nth-child(2){animation-delay:.2s!important}
+/* ===== v11: 1위 발표 직전 3초 긴장 ===== */
+.lv-fin > .lv-suspense-dim{position:fixed;inset:0;z-index:50;pointer-events:none;opacity:0;transition:opacity .5s ease;background:radial-gradient(circle 22vmin at var(--sx,50%) 45%,rgba(255,240,190,.28),rgba(0,0,0,.78) 60%)}
+.lv-fin.lv-suspense .lv-suspense-dim{opacity:1;animation:lv-spot-sweep 1s ease-in-out infinite alternate}
+@keyframes lv-spot-sweep{0%{--sx:22%}100%{--sx:78%}}
+@property --sx{syntax:'<percentage>';inherits:false;initial-value:50%}
+.lv-fin > .lv-suspense-text{position:fixed;left:50%;top:40%;z-index:51;transform:translate(-50%,-50%) scale(.6);opacity:0;pointer-events:none;display:flex;flex-direction:column;align-items:center;gap:6px;transition:opacity .3s ease}
+.lv-suspense-text small{font-weight:900;font-size:clamp(18px,2.4vw,30px);color:#ffd43b;letter-spacing:.1em}
+.lv-suspense-text b{font-weight:900;font-size:clamp(44px,7vw,100px);color:#fff;-webkit-text-stroke:3px #3b1d72;paint-order:stroke;text-shadow:0 0 30px rgba(255,212,59,.7),0 8px 0 rgba(0,0,0,.4);white-space:nowrap}
+.lv-fin.lv-suspense .lv-suspense-text{opacity:1;animation:lv-suspense-beat 3s ease-in both}
+@keyframes lv-suspense-beat{0%{transform:translate(-50%,-50%) scale(.6)}10%{transform:translate(-50%,-50%) scale(1)}30%{transform:translate(-50%,-50%) scale(1.04)}35%{transform:translate(-50%,-50%) scale(1)}55%{transform:translate(-50%,-50%) scale(1.07)}60%{transform:translate(-50%,-50%) scale(1)}80%{transform:translate(-50%,-50%) scale(1.1) rotate(-1deg)}90%{transform:translate(-50%,-50%) scale(1.12) rotate(1deg)}100%{transform:translate(-50%,-50%) scale(1.18)}}
+.lv-fin.lv-grand .lv-pod-1 .lv-pod-block{box-shadow:0 0 50px 14px rgba(255,212,59,.55),inset 0 6px 0 rgba(255,255,255,.3)}
+.lv-callout.grand{top:40%}
+.lv-callout.grand::before{content:"";position:absolute;left:50%;top:50%;width:150vmax;height:150vmax;margin:-75vmax 0 0 -75vmax;z-index:-1;background:repeating-conic-gradient(rgba(255,212,59,.38) 0 8deg,transparent 8deg 20deg);-webkit-mask:radial-gradient(circle,#000 0,transparent 45%);mask:radial-gradient(circle,#000 0,transparent 45%);animation:kq-spin 6s linear infinite}
+.lv-callout.grand .lv-callout-big{font-size:clamp(70px,11vw,160px);color:#ffe066;text-shadow:0 0 40px rgba(255,212,59,.9),0 8px 0 rgba(0,0,0,.35)}
+.lv-callout.grand .lv-callout-name{background:linear-gradient(90deg,#f59f00,#ffd43b,#f59f00);color:#3b1d72;font-size:clamp(38px,6vw,90px)}
+@media (prefers-reduced-motion: reduce){
+  .lv-pod-seq .lv-pod-who.lv-pod-in{animation:none;opacity:1;transform:none}
+  .lv-fin.lv-suspense .lv-suspense-dim,.lv-fin.lv-suspense .lv-suspense-text,.lv-callout.grand::before{animation:none}
+  .lv-fin.lv-suspense .lv-suspense-text{transform:translate(-50%,-50%)}
+}

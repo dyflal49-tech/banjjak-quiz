@@ -37,12 +37,15 @@
   const COOP = new Set(['robot', 'submarine', 'garden', 'boss']);
   const ARENA = new Set(['robot', 'submarine', 'marble', 'kingdom', 'space']);
   const ARENA_ACT = { boost: ['부스트 준비 완료!', '아래 버튼을 길게 눌러 부스트를 쏘아요.'], symbol: ['큰 화면을 보세요!', '큰 화면에 나온 기호와 같은 기호를 골라요.'], flags: ['깃발을 꽂을 차례!', '우리 팀 땅과 맞닿은 칸을 골라요.'], blocks: ['블록을 떨어뜨릴 차례!', '움직이는 블록을 알맞은 때 눌러요.'] };
+  const LOOP = new Set(['garden', 'boss']); // 정한 시간 동안 문제를 반복하는 진행자 모드
   const TUTOR = new Set(['robot', 'submarine', 'marble', 'kingdom', 'space', 'runner', 'treasure']);
   const howToOf = id => { try { const m = window.KQModes && window.KQModes.get(id); return m && Array.isArray(m.howTo) ? m.howTo : []; } catch { return []; } };
   const TEAM_MODES = new Set(['kingdom', 'space']);
   const fmtPin = pin => String(pin || '').replace(/^(\d{3})(\d{3})$/, '$1 $2');
   const num = n => Number(n || 0).toLocaleString('ko-KR');
   const fmtClock = s => { s = Math.max(0, Math.floor(s || 0)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
+  const qLabel = v => `${(v.questionIndex ?? 0) + 1} / ${v.questionCount || '?'}` + (v.loop && v.questionRound > 0 ? ` · ${v.questionRound + 1}바퀴째` : '');
+  const loopTimeUp = v => !!(v && v.loop && v.gameEndsAt && KQ.now() >= v.gameEndsAt);
   const vibrate = p => { try { if (navigator.vibrate) navigator.vibrate(p); } catch { /* 무시 */ } };
   const imgOk = src => typeof src === 'string' && (src.startsWith('/') || src.startsWith('kqimg:') || src.startsWith('data:image/') || src.startsWith('https://'));
   const teamInfo = (teams, i) => {
@@ -323,6 +326,8 @@
       barName.textContent = me.nickname || '';
       const k = avKey(me.avatar) + '|' + (me.nickname || '');
       if (k !== barAvKey) { barAvKey = k; barAv.replaceChildren(avatarNode(me.avatar, 32, me.nickname)); }
+      barScore.hidden = v.phase === 'finished';
+      if (v.phase === 'finished') return;
       const sc = Number(me.score) || 0;
       if (lastScore !== null && sc > lastScore) fxCountUp(barScore, lastScore, sc, 900);
       else if (lastScore !== sc) barScore.textContent = num(sc);
@@ -351,7 +356,7 @@
       autoFill.style.transform = `scaleX(${Math.min(1, rem / autoTotal).toFixed(3)})`;
     }
     function renderPanel(v) {
-      if (!v.me || v.kicked) { if (panelOn) { modeCall(m, 'dispose', panel); panel.replaceChildren(); panelOn = false; } return; }
+      if (!v.me || v.kicked || v.phase === 'finished') { if (panelOn) { modeCall(m, 'dispose', panel); panel.replaceChildren(); panelOn = false; } return; }
       panelOn = true;
       modeCall(m, 'renderPlayer', panel, v, sendAction);
     }
@@ -558,7 +563,7 @@
         if (n !== lastN) { lastN = n; const s = el('span', { class: 'lv-count-num' }, String(n)); big.replaceChildren(s); }
       };
       tick(v);
-      const how = TUTOR.has(v.mode) && (v.pacing === 'player' || !(v.questionIndex > 0)) ? howToOf(v.mode) : [];
+      const how = TUTOR.has(v.mode) && (v.pacing === 'player' || (!(v.questionIndex > 0) && !(v.questionRound > 0))) ? howToOf(v.mode) : [];
       return { node: el('div', { class: 'lv-center-msg' }, el('p', { class: 'lv-lead' }, v.quizTitle || ''), big, el('h1', {}, '준비!'), how.length ? el('ol', { class: 'lv-howto-mini' }, how.map(t => el('li', {}, t))) : null), bg: 'lv-bg-purple', tick, update: tick };
     }
 
@@ -731,42 +736,17 @@
       for (const a of (Array.isArray(s.awards) ? s.awards : [])) if (a && a.nickname && a.nickname === me.nickname) out.push(el('p', { class: 'lv-fin-extra award' }, `나의 상: ${a.title}`));
       return out.length ? el('div', { class: 'lv-fin-extras' }, out) : null;
     }
+    // 최종 결과(순위·점수·상)는 학생 화면에 보여 주지 않고 선생님 화면 시상식에서만 발표
     function finishedScreen(v) {
-      const me = v.me;
-      const rank = Number(me.rank) || 0;
-      const top = rank >= 1 && rank <= 3;
-      const pod = (v.podium || []).slice().sort((a, b) => (a.rank || 99) - (b.rank || 99));
-      const top3 = el('div', { class: 'lv-mini-podium', 'aria-hidden': 'true' },
-        [1, 0, 2].map(i => pod[i] ? el('div', { class: `lv-mini-pod p${i + 1}` }, avatarNode(pod[i].avatar, 36, pod[i].nickname, 'lv-mini-av'), el('span', { class: 'lv-mini-name' }, pod[i].nickname || ''), el('span', { class: 'lv-mini-block' }, String(pod[i].rank || i + 1))) : el('div', { class: `lv-mini-pod p${i + 1} empty` })));
-      const scoreNum = el('span', { class: 'lv-final-num' }, num(me.score));
-      const acc = me.answered ? (Number(me.correct) || 0) / me.answered : 0;
-      const praise = top ? ['', '최고예요! 1등을 차지했어요', '멋져요! 2등이에요', '훌륭해요! 3등이에요'][rank] : '끝까지 함께해 줘서 고마워요';
-      const praiseSub = top ? '끝까지 함께해 줘서 고마워요'
-        : acc >= 0.7 ? '정답을 정말 많이 맞혔어요. 대단해요!'
-        : (Number(me.correct) || 0) > 0 ? `${me.correct}문제나 맞혔어요. 다음엔 더 잘할 수 있어요!`
-        : '다음 게임에서 더 멋지게 해 봐요!';
-      const box = el('div', { class: 'lv-center-msg lv-finished' + (top ? ' lv-fin-top' : '') },
+      const me = v.me || {};
+      const box = el('div', { class: 'lv-center-msg lv-finished lv-fin-hidden' },
         el('p', { class: 'lv-lead' }, '게임 끝!'),
-        el('div', { class: 'lv-fin-me' }, avatarNode(me.avatar, 120, me.nickname, 'lv-fin-av'), top ? medalNode(rank) : null),
-        el('h1', { class: 'lv-rank-big lv-fin-rank pop-in' }, rank ? `${rank}위` : '수고했어요'),
-        el('p', { class: 'lv-praise' }, praise),
-        el('p', { class: 'lv-praise-sub' }, praiseSub),
-        el('p', { class: 'lv-final-score' }, scoreNum, '점' + (me.answered ? ` · ${me.answered}문제 중 ${me.correct || 0}개 정답` : '')),
-        finExtra(v),
-        top3,
-        top5List(pod, me),
+        el('div', { class: 'lv-fin-me' }, avatarNode(me.avatar, 120, me.nickname, 'lv-fin-av')),
+        el('h1', { class: 'lv-fin-nick pop-in' }, me.nickname ? me.nickname + ' 님, 수고했어요!' : '수고했어요!'),
+        el('div', { class: 'lv-fin-look' }, el('span', { class: 'lv-fin-look-icon', 'aria-hidden': 'true' }), el('p', {}, '최종 결과는 선생님 화면에서 함께 확인해요'), el('small', {}, '누가 1등일까요? 다 같이 큰 화면을 봐요!')),
         KQ.btn('다시 홈으로', () => KQ.go('/'), 'big lv-white-btn'));
-      announce(live, `게임이 끝났어요. ${rank ? rank + '위' : ''}, ${num(me.score)}점. ${praise}`);
-      const enter = () => {
-        fxCountUp(scoreNum, 0, Number(me.score) || 0, 1400);
-        if (top) {
-          later(() => { fxCall('fireworks', 5000); snd('fanfare'); }, 350);
-          later(() => snd('cheer'), 1300);
-        } else {
-          fxCall('rain', 4500);
-          later(() => snd('sparkle'), 300);
-        }
-      };
+      announce(live, '게임이 끝났어요. 최종 결과는 선생님 화면에서 함께 확인해요.');
+      const enter = () => { later(() => snd('sparkle'), 300); };
       return { node: box, bg: 'lv-bg-purple', enter };
     }
 
@@ -886,9 +866,10 @@
           check('skipOwnQuestions', '학생이 낸 문제는 출제자가 풀지 않기')),
         el('div', { class: 'lv-opts-grid' },
           info.teams ? select('teamCount', '팀 수', [2, 3, 4], v => `${v}팀`) : null,
-          info.pacing === 'player' ? select('durationMin', '게임 시간', [2, 3, 5, 7, 10, 15], v => `${v}분`) : null,
+          info.pacing === 'player' || LOOP.has(info.id) ? select('durationMin', '게임 시간', [2, 3, 5, 7, 10, 15], v => `${v}분`) : null,
           info.pacing !== 'player' ? select('autoAdvance', '결과 자동 넘김', AUTO_CHOICES, v => v ? `${v}초 뒤 자동으로 넘김` : '끔 (선생님이 직접 넘김)') : null),
         info.pacing !== 'player' ? el('p', { class: 'lv-help' }, '정답 공개와 점수판이 정한 시간 뒤에 저절로 다음으로 넘어가요. 게임 중에도 상단의 설정에서 바꿀 수 있어요.') : null,
+        LOOP.has(info.id) ? el('p', { class: 'lv-help' }, `게임 시간 동안 문제를 1번부터 끝까지 낸 뒤 시간이 남으면 처음부터 다시 내요. 지금 퀴즈는 ${usable}문제예요.`) : null,
         info.id === 'robot' ? el('p', { class: 'lv-help' }, '로봇 경주는 6단계(단계마다 협동 미니게임)까지 있어요. 끝까지 가려면 10분 이상을 추천해요. 미니게임 시간은 게임 시간에서 빠지지 않아요.') : null,
         info.id === 'runner' ? el('p', { class: 'lv-help' }, '퀴즈 런은 객관식과 참/거짓 문제로만 진행해요. 학생 기기는 키보드(방향키, 스페이스바)나 터치로 조작해요.') : null,
         info.pacing === 'player' && pollCount ? el('p', { class: 'notice' }, `각자 속도 게임에서는 설문 문제 ${pollCount}개를 빼고 진행해요.`) : null,
@@ -899,7 +880,7 @@
         createBtn.disabled = true;
         const options = { randomizeQuestions: state.randomizeQuestions, randomizeAnswers: state.randomizeAnswers, showOnDevice: state.showOnDevice, friendlyNicknames: state.friendlyNicknames, skipOwnQuestions: state.skipOwnQuestions };
         if (info.teams) options.teamCount = state.teamCount;
-        if (info.pacing === 'player') options.duration = state.durationMin * 60;
+        if (info.pacing === 'player' || LOOP.has(info.id)) options.duration = state.durationMin * 60;
         if (info.pacing !== 'player') options.autoAdvance = state.autoAdvance;
         try {
           const r = await KQ.api('/api/games', 'POST', { quizId, mode: info.id, options });
@@ -976,7 +957,17 @@
     const footPin = el('span', { class: 'lv-hfoot-pin' }, 'PIN ' + fmtPin(pin));
     const footCount = el('span', {}, '');
     const footConn = el('span', { class: 'lv-conn' }, '연결 중…');
-    const foot = el('footer', { class: 'lv-hfoot' }, footPin, footCount, el('span', { class: 'spacer' }), footConn);
+    const footClock = el('span', { class: 'lv-hfoot-clock', hidden: true, role: 'timer' }, '');
+    const foot = el('footer', { class: 'lv-hfoot' }, footPin, footCount, footClock, el('span', { class: 'spacer' }), footConn);
+    // 반복 모드(꽃밭·보스): 남은 게임 시간과 바퀴 수
+    const syncClock = () => {
+      const v = view; const on = !!(v && v.loop && v.gameEndsAt && v.phase !== 'finished' && v.phase !== 'lobby');
+      footClock.hidden = !on; if (!on) return;
+      const s = KQ.secondsLeft(v.gameEndsAt); const up = s <= 0;
+      footClock.textContent = up ? '게임 시간 끝! 이 문제가 마지막이에요' : `남은 게임 시간 ${fmtClock(s)}` + (v.questionRound > 0 ? ` · ${v.questionRound + 1}바퀴째` : '');
+      footClock.classList.toggle('hurry', s <= 30);
+    };
+    const clockT = setInterval(() => { if (!ended) syncClock(); }, 500);
     // 게임 중에도 늘 보이는 작은 QR (튕긴 학생이 다시 들어오도록). 누르면 크게, 접기 가능
     const miniQrBody = el('div', { class: 'lv-miniqr-body' });
     const miniQrPin = el('strong', { class: 'lv-miniqr-pin' }, fmtPin(pin));
@@ -1286,29 +1277,12 @@
       podiumStarted = false;
       if (sc.banner) later(() => {
         if (sc.bannerWin) { fxCall('confetti', { count: 170, power: 1.2 }); fxCall('burst', sc.banner, { count: 60 }); snd('cheer'); }
-        else { fxCall('stars', sc.banner); snd('sparkle'); }
+        else { fxCall('flash', '#ff2020', 260); snd('defeat'); }
       }, 350);
       if (sc.teamWin) later(() => { fxCall('burst', sc.teamWin, { count: 70 }); fxCall('stars', sc.teamWin); snd('boom'); }, 650);
-      const any = pods[1] || pods[2] || pods[3];
-      if (any) later(() => snd('drumroll'), base * 1000 + 100);
-      [3, 2, 1].forEach(place => {
-        const who = pods[place];
-        if (!who) return;
-        later(() => {
-          fxCall('burst', who, { count: place === 1 ? 110 : 60 });
-          snd('boom');
-          const nm = (sc.podNames || {})[place] || '';
-          callout(sc.node, `${place}위`, nm, 'place-' + place); speak(`${place}위는, ${nm}!`);
-          if (place === 1) {
-            if (sc.node) sc.node.classList.add('lv-spot-on');
-            fxCall('fireworks', 6000);
-            fxCall('rain', 5000);
-            snd('fanfare');
-            later(() => snd('cheer'), 700);
-          }
-        }, (base + POD_DELAY[place] + 0.6) * 1000);
-      });
-      later(() => { podiumStarted = true; if (bgmOn()) bgmCall('play', 'podium'); }, pods[1] ? (base + POD_DELAY[1] + 2.6) * 1000 : 1500);
+      // 시상 순서: 드럼롤 → 3위 → 2위 (호명 목소리가 시작되는 순간 캐릭터 등장) → 3초 긴장 → 1위 화려하게 → 4·5위 → 음악 → 상
+      const node = sc.node;
+      const showRest = () => { if (node) node.classList.add('lv-rest-in'); };
       const awardList = (sc.awards || []).slice();
       const nextAward = i => {
         if (i >= awardList.length) return;
@@ -1318,7 +1292,43 @@
           snd('levelup'); callout(sc.node, a.title || '', a.nickname || '', 'award', a.avatar || null);
         }, () => nextAward(i + 1));
       };
-      if (awardList.length) later(() => nextAward(0), pods[1] ? (base + POD_DELAY[1] + 3.2) * 1000 : 1200);
+      const afterAll = () => {
+        showRest();
+        later(() => { podiumStarted = true; if (bgmOn()) bgmCall('play', 'podium'); }, 400);
+        if (awardList.length) later(() => nextAward(0), 1200);
+      };
+      const call = (place, then) => {
+        const who = pods[place];
+        if (!who) { then(); return; }
+        const nm = (sc.podNames || {})[place] || '';
+        speakSync(`${place}위는, ${nm}!`, () => {
+          who.classList.add('lv-pod-in');
+          if (place === 1) {
+            if (node) { node.classList.remove('lv-suspense'); node.classList.add('lv-spot-on', 'lv-grand'); }
+            fxCall('flash', '#ffffff', 260);
+            fxCall('burst', who, { count: 170 });
+            fxCall('fireworks', 8000); fxCall('rain', 6000);
+            fxCall('confetti', { count: 200, power: 1.35 }); later(() => fxCall('confetti', { count: 160, power: 1.1 }), 900);
+            snd('boom'); snd('fanfare'); later(() => snd('cheer'), 700); later(() => snd('cheer'), 2200);
+            callout(sc.node, '1위', nm, 'place-1 grand');
+          } else {
+            fxCall('burst', who, { count: 70 }); snd('boom');
+            callout(sc.node, `${place}위`, nm, 'place-' + place);
+          }
+        }, then);
+      };
+      // 1위 직전 3초 긴장 연출
+      const suspense = then => {
+        if (!pods[1]) { then(); return; }
+        if (node) node.classList.add('lv-suspense');
+        snd('suspense');
+        later(() => { if (node) node.classList.remove('lv-suspense'); then(); }, 3000);
+      };
+      const any = pods[1] || pods[2] || pods[3];
+      if (any) {
+        later(() => snd('drumroll'), base * 1000 + 100);
+        later(() => call(3, () => call(2, () => suspense(() => call(1, () => later(afterAll, 600))))), base * 1000 + 2100);
+      } else later(afterAll, 1200);
     }
 
     function buildHost(v) {
@@ -1418,7 +1428,7 @@
         const n = Math.max(1, KQ.secondsLeft(vv.endsAt) || 1);
         if (n !== lastN) { lastN = n; big.replaceChildren(el('span', { class: 'lv-hcount-num' }, String(n))); KQ.sound.play('countdown'); }
       };
-      const how = TUTOR.has(v.mode) && (v.pacing === 'player' || !(v.questionIndex > 0)) ? howToOf(v.mode) : [];
+      const how = TUTOR.has(v.mode) && (v.pacing === 'player' || (!(v.questionIndex > 0) && !(v.questionRound > 0))) ? howToOf(v.mode) : [];
       const cdTotal = v.mode === 'runner' ? 12000 : 9000;
       const steps = how.map((t, i) => el('li', { class: 'lv-howto-step' }, el('span', { class: 'lv-howto-num' }, String(i + 1)), el('span', {}, t)));
       const tick0 = tick;
@@ -1427,7 +1437,7 @@
       const host = v.pacing !== 'player' && v.questionCount;
       const node = el('div', { class: 'lv-hcountdown' },
         el('h1', { class: 'lv-hcount-title' }, v.quizTitle || ''),
-        host ? el('p', { class: 'lv-hcount-sub' }, `${(v.questionIndex ?? 0) + 1}번 문제 / 총 ${v.questionCount}문제`) : el('p', { class: 'lv-hcount-sub' }, v.modeName || ''),
+        host ? el('p', { class: 'lv-hcount-sub' }, `${(v.questionIndex ?? 0) + 1}번 문제 / 총 ${v.questionCount}문제` + (v.loop && v.questionRound > 0 ? ` · ${v.questionRound + 1}바퀴째` : '')) : el('p', { class: 'lv-hcount-sub' }, v.modeName || ''),
         steps.length ? el('div', { class: 'lv-howto' }, el('h2', {}, '플레이하는 방법'), el('ol', {}, steps)) : null,
         big,
         steps.length ? null : attachStage(el('div', { class: 'lv-stage-slot small' })));
@@ -1471,7 +1481,7 @@
         el('div', { class: 'lv-hq-main' },
           el('div', { class: 'lv-q-band' },
             el('div', { class: 'lv-q-meta' },
-              el('span', { class: 'badge purple' }, `${(v.questionIndex ?? 0) + 1} / ${v.questionCount || '?'}`),
+              el('span', { class: 'badge purple' }, qLabel(v)),
               el('span', { class: 'badge' }, KQ.typeNames?.[q.type] || q.type),
               q.points === 'double' ? el('span', { class: 'badge orange' }, '점수 두 배') : null,
               q.authorName ? el('span', { class: 'badge green' }, '학생 출제: ' + q.authorName) : null),
@@ -1556,13 +1566,13 @@
       const answered = Number(rv.answered) || 0;
       const pct = answered ? Math.round((Number(rv.correctCount) || 0) / answered * 100) : 0;
       const summary = el('div', { class: 'lv-rv-summary' }, poll ? `응답 ${num(rv.answered)}명` : `정답 ${num(rv.correctCount)}명 / 응답 ${num(rv.answered)}명` + (answered ? ` · 정답률 ${pct}%` : ''));
-      const last = (v.questionIndex ?? 0) + 1 >= (v.questionCount || 0);
+      const last = v.loop ? loopTimeUp(v) : (v.questionIndex ?? 0) + 1 >= (v.questionCount || 0);
       const baseLabel = classic ? '다음' : (last ? '결과 보기' : '다음');
       const nextBtn = KQ.btn(baseLabel, () => act('next', nextBtn), 'big lv-white-btn lv-next-btn');
       const auto = autoPanel(nextBtn, baseLabel);
       const node = el('div', { class: 'lv-rv' + (classic ? '' : ' with-stage') },
         el('div', { class: 'lv-q-band small' },
-          el('div', { class: 'lv-q-meta' }, el('span', { class: 'badge purple' }, `${(v.questionIndex ?? 0) + 1} / ${v.questionCount || '?'}`), q.authorName ? el('span', { class: 'badge green' }, '학생 출제: ' + q.authorName) : null),
+          el('div', { class: 'lv-q-meta' }, el('span', { class: 'badge purple' }, qLabel(v)), q.authorName ? el('span', { class: 'badge green' }, '학생 출제: ' + q.authorName) : null),
           el('h1', { class: 'lv-q-band-text' }, q.text || '')),
         el('div', { class: 'lv-rv-grid' },
           el('div', { class: 'lv-rv-left' }, res, el('div', { class: 'lv-rv-actions' }, summary, auto.node, nextBtn)),
@@ -1601,7 +1611,7 @@
         list.append(row);
       });
       if (!rows.length) list.append(el('li', { class: 'lv-lb-row' }, el('span', { class: 'lv-lb-name' }, '아직 점수가 없어요')));
-      const last = (v.questionIndex ?? 0) + 1 >= (v.questionCount || 0);
+      const last = v.loop ? loopTimeUp(v) : (v.questionIndex ?? 0) + 1 >= (v.questionCount || 0);
       const baseLabel = last ? '결과 보기' : '다음 문제';
       const nextBtn = KQ.btn(baseLabel, () => act('next', nextBtn), 'big lv-white-btn lv-next-btn');
       const auto = autoPanel(nextBtn, baseLabel);
@@ -1610,7 +1620,7 @@
         el('div', { class: 'lv-title-band' }, el('h1', {}, '점수판')),
         list,
         el('p', { class: 'sr-only' }, rows.map(r => `${r.rank}위 ${r.nickname} ${r.score}점`).join(', ')),
-        el('div', { class: 'lv-rv-actions' }, el('span', { class: 'lv-rv-summary' }, `${(v.questionIndex ?? 0) + 1} / ${v.questionCount || '?'} 문제 완료`), auto.node, nextBtn));
+        el('div', { class: 'lv-rv-actions' }, el('span', { class: 'lv-rv-summary' }, `${qLabel(v)} 문제 완료`), auto.node, nextBtn));
       return { node, tick: auto.tick, update: auto.tick, first, ups };
     }
 
@@ -1654,7 +1664,7 @@
         const win = st === 'success' || st === 'victory', lose = st === 'failed' || st === 'defeat';
         if (win || lose) {
           const chase = v.modeState.kind === 'chase', chaser = v.modeState.theme === 'sub' ? '바다 괴물' : '로봇';
-          banner = el('div', { class: 'lv-coop-banner ' + (win ? 'good' : 'bad') + ' pop-in', role: 'status' }, chase ? (win ? '반 전체 탈출 성공!' : `${chaser}에게 잡혔어요`) : (win ? '반 전체 미션 성공!' : '아쉽게 미션 실패'), el('small', {}, chase ? (win ? `부스트 ${num(v.modeState.boosts)}번으로 ${chaser}을 따돌렸어요` : '다음엔 부스트를 더 모아 꼭 탈출해요') : (win ? '모두 힘을 모아 해냈어요' : '다음엔 꼭 성공해요')));
+          banner = el('div', { class: 'lv-coop-banner ' + (win ? 'good' : 'bad') + ' pop-in', role: 'status' }, chase ? (win ? '반 전체 탈출 성공!' : `${chaser}에게 잡혔어요`) : (win ? '반 전체 미션 성공!' : v.mode === 'boss' ? '보스에게 패배했어요' : '아쉽게 미션 실패'), el('small', {}, chase ? (win ? `부스트 ${num(v.modeState.boosts)}번으로 ${chaser}을 따돌렸어요` : '다음엔 부스트를 더 모아 꼭 탈출해요') : (win ? '모두 힘을 모아 해냈어요' : '다음엔 꼭 성공해요')));
           bannerWin = win;
           parts.push(banner);
         }
@@ -1694,7 +1704,8 @@
         KQ.btn('리포트 보기', () => KQ.go(v.reportId ? '/teacher/reports/' + encodeURIComponent(v.reportId) : '/teacher/reports'), 'lv-white-btn'),
         KQ.btn('같은 퀴즈로 다시', () => KQ.go(quizId ? '/teacher/host/' + encodeURIComponent(quizId) : '/teacher'), 'lv-white-btn'),
         KQ.btn('게임 닫기', closeGame, 'danger')));
-      const node = el('div', { class: 'lv-fin' }, parts);
+      parts.push(el('div', { class: 'lv-suspense-dim', 'aria-hidden': 'true' }), el('div', { class: 'lv-suspense-text', 'aria-hidden': 'true' }, el('small', {}, '두구두구두구'), el('b', {}, '대망의 1위는…?')));
+      const node = el('div', { class: 'lv-fin lv-pod-seq' }, parts);
       try { [3, 2, 1].forEach(pl => { if (podNames[pl]) preloadVoice(`${pl}위는, ${podNames[pl]}!`); }); awards.forEach(a => preloadVoice(`${josa(a.title, '은', '는')}, ${a.nickname || ''}!`)); } catch { /* 무시 */ }
       return { node, pods, banner, bannerWin, teamWin, delayBase, podNames, awards, awardNodes: [...node.querySelectorAll('.lv-award')] };
     }
@@ -1718,7 +1729,7 @@
     });
     KQ.onLeave(() => {
       ended = true;
-      clearInterval(timer); clearLater(); stream.close();
+      clearInterval(timer); clearInterval(clockT); clearLater(); stream.close();
       bgmCall('stop'); fxCall('stop');
       settingsUI = null;
       document.removeEventListener('fullscreenchange', onFs);

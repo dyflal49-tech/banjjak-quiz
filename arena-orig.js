@@ -440,7 +440,15 @@
   // 3. 보스 레이드: 보스를 쓰러뜨리면 더 강한 보스가 이어서 등장 (level 1, 2, 3 ...)
   // =====================================================================
   const BOSS_PAL = [['#8e5bd6', '#b794f6', '#3b1d6e'], ['#ff6b6b', '#ffc9c9', '#7a1f1f'], ['#5c7cfa', '#bac8ff', '#1b2a6e'], ['#2f9e44', '#b2f2bb', '#0b3d1a'], ['#343a40', '#ffd43b', '#000000'], ['#e8590c', '#ffd8a8', '#5c1f00'], ['#0ca678', '#96f2d7', '#063d30'], ['#c2255c', '#fcc2d7', '#4a0a24']];
-  const ATTACKS = [{ id: 'meteor', name: '용암 폭우!' }, { id: 'slam', name: '빙하 창격!' }, { id: 'charge', name: '심연의 촉수 강타!' }, { id: 'meteor', name: '천둥 낙뢰!' }, { id: 'laser', name: '그림자 화염!' }, { id: 'laser', name: '미사일 일제 발사!' }, { id: 'meteor', name: '혼돈 운석 소환!' }];
+  // v11: 보스마다 공격 이름에 맞는 연출(fx)·효과음(sfx). id 는 보스 몸 동작 CSS
+  const ATTACKS = [
+    { id: 'meteor', fx: 'lava', name: '용암 폭우!', hit: 1150, sfx: 'atk-lava' },
+    { id: 'slam', fx: 'frost', name: '눈보라 얼음창!', hit: 950, sfx: 'atk-ice' },
+    { id: 'slam', fx: 'tentacle', name: '심연의 촉수 강타!', hit: 1000, sfx: 'atk-water' },
+    { id: 'meteor', fx: 'thunder', name: '천둥 낙뢰!', hit: 700, sfx: 'atk-thunder' },
+    { id: 'laser', fx: 'shadow', name: '그림자 화염!', hit: 1000, sfx: 'atk-flame' },
+    { id: 'laser', fx: 'missile', name: '미사일 일제 발사!', hit: 1250, sfx: 'atk-missile' },
+    { id: 'meteor', fx: 'chaos', name: '혼돈 운석 소환!', hit: 1300, sfx: 'atk-chaos' }];
   const lvOf = s => Math.max(1, Math.round(N(s && s.level, 1)));
   const palOf = lv => BOSS_PAL[(lv - 1) % BOSS_PAL.length];
   const atkOf = lv => ATTACKS[(Math.max(1, lv) - 1) % ATTACKS.length];
@@ -624,7 +632,7 @@
           if (play) { fx('burst', st.boss, { count: 120 }); fx('fireworks', 5000); fx('confetti', { y: 0.5, count: 200, power: 1.3 }); snd('fanfare'); k.later(st, () => snd('cheer'), 800); }
         } else if (status === 'defeat') {
           showBanner(st, '방패가 깨졌어요… 보스의 승리', true, true);
-          if (play) { replay(st.scene, 'quake'); snd('boom'); k.later(st, () => snd('wrong'), 300); for (let i = 0; i < 4; i++) k.later(st, () => spawnText(st, '하하하!', 'laugh'), 400 + i * 450); }
+          if (play) { replay(st.scene, 'quake'); defeatFx(st); for (let i = 0; i < 6; i++) k.later(st, () => spawnText(st, '하하하!', 'laugh'), 400 + i * 380); }
         }
       };
       if (play) k.later(st, run, afterMs + 500); else run();
@@ -639,6 +647,20 @@
         st.endcard.classList.add('on');
       }, st.first ? 0 : afterMs + 900);
     }
+  }
+  // v11: 패배 - 교사 화면 전체를 덮는 큰 연출(약 5초 뒤 저절로 사라짐)
+  function defeatFx(st) {
+    const k = K(), H = k.H; const s = mState(st.v); const name = S2(s.bossName) || '보스';
+    const rm = reduced();
+    const big = H('div', { class: 'ar-o-boss defeat ar-o-dboss', 'aria-hidden': 'true' }, H('div', { class: 'ar-o-bwrap' }, bossSVG(palOf(lvOf(s)), lvOf(s))));
+    const ov = H('div', { class: 'ar-o ar-o-defeat' + (rm ? ' calm' : ''), role: 'status' },
+      H('div', { class: 'ar-o-dred' }), crackSVG(1, 90, 50), big,
+      H('div', { class: 'ar-o-dstamp' }, H('b', { text: '패배…' }), H('span', { text: name + '의 승리' }), H('small', { text: '방패가 모두 부서졌어요' })));
+    (document.body || st.scene).append(ov);
+    setTimeout(() => { ov.classList.add('out'); }, 4300); setTimeout(() => ov.remove(), 5000);
+    snd('defeat'); fx('flash', '#ff0000', 420);
+    if (!rm) { try { document.body.classList.remove('ar-o-quakepage'); void document.body.offsetWidth; document.body.classList.add('ar-o-quakepage'); setTimeout(() => document.body.classList.remove('ar-o-quakepage'), 1000); } catch { /* 무시 */ } shards(st, 36); }
+    k.later(st, () => snd('boom'), 1200);
   }
   function setLook(st, lv) {
     st.bwrap.replaceChildren(bossSVG(palOf(lv), lv));
@@ -756,9 +778,9 @@
     st.scene.style.setProperty('--amp', Math.round(6 + 22 * power) + 'px');
     st.boss.classList.remove('slam', 'charge', 'laser', 'meteor'); st.banner.classList.remove('on');
     replay(st.boss, 'windup'); snd('whoosh');
-    spawnText(st, a.name, 'counter');
-    k.later(st, () => { st.boss.classList.remove('windup'); replay(st.boss, a.id); attackFx(st, a.id, power); }, 450);
-    const hitAt = a.id === 'meteor' ? 1100 : a.id === 'laser' ? 950 : 800;
+    spawnText(st, a.name, 'counter atk-' + a.fx);
+    k.later(st, () => { st.boss.classList.remove('windup'); replay(st.boss, a.id); snd(a.sfx); themeFx(st, a, power); }, 450);
+    const hitAt = 450 + a.hit;
     k.later(st, () => {
       if (rm) blink(st); else replay(st.scene, 'quake');
       replay(st.vignette, 'on'); replay(st.shield, 'hitme');
@@ -800,6 +822,97 @@
     } else if (id === 'charge') {
       k.later(st, () => fx('flash', '#ffffff', 120), 250);
     }
+  }
+  // v11: 공격 이름에 맞는 연출 (layer 안 DOM, 끝나면 제거)
+  function themeFx(st, a, power) {
+    const k = K(), H = k.H; if (st.dead) return;
+    const L = st.layer; const c = center(st.boss, L); const tg = center(st.shield, L);
+    const add = (el, ms) => { L.append(el); setTimeout(() => el.remove(), ms); return el; };
+    const anim = (el, frames, opt) => { try { return el.animate(frames, opt); } catch { return null; } };
+    const tint = (cls, ms) => add(H('div', { class: 'ar-o-tint ' + cls }), ms);
+    if (reduced() || !c.w) { tint(a.fx, 900); return; }
+    const W = c.w, Hh = c.h, n = (lo, hi) => Math.round(lo + (hi - lo) * power);
+    if (a.fx === 'lava') {
+      tint('lava', 2000);
+      for (let i = 0; i < n(8, 14); i++) {
+        const x = rnd(0.08, 0.92) * W, y = rnd(0.55, 0.95) * Hh, d = i * 80;
+        const m = add(H('div', { class: 'ar-o-lava' }), 1400 + d);
+        m.style.left = x + 'px'; m.style.top = y + 'px';
+        anim(m, [{ transform: 'translate(' + rnd(-40, 40) + 'px,' + (-y - 50) + 'px) scale(.7,1.4)' }, { transform: 'translate(0,0) scale(1)' }], { duration: 520, delay: d, easing: 'ease-in', fill: 'both' });
+        k.later(st, () => { const s = add(H('div', { class: 'ar-o-splash lava' }), 700); s.style.left = x + 'px'; s.style.top = y + 'px'; }, 520 + d);
+      }
+    } else if (a.fx === 'frost') {
+      const ov = tint('frost', 2300);
+      for (let i = 0; i < n(5, 8); i++) {
+        const sp = add(H('div', { class: 'ar-o-icespear' }), 1300);
+        const sx = c.x + rnd(-c.bw * 0.3, c.bw * 0.3), sy = c.y + rnd(-c.bh * 0.2, c.bh * 0.1);
+        const tx = tg.x + rnd(-tg.bw * 0.4, tg.bw * 0.4), ty = tg.y + rnd(-10, 10);
+        const ang = Math.atan2(ty - sy, tx - sx) * 180 / Math.PI;
+        sp.style.left = sx + 'px'; sp.style.top = sy + 'px';
+        anim(sp, [{ transform: 'rotate(' + ang + 'deg) translateX(0) scaleX(.3)', opacity: 0 }, { transform: 'rotate(' + ang + 'deg) translateX(0) scaleX(1)', opacity: 1, offset: 0.2 }, { transform: 'rotate(' + ang + 'deg) translateX(' + Math.hypot(tx - sx, ty - sy) + 'px) scaleX(1)', opacity: 1 }], { duration: 520, delay: 100 + i * 70, easing: 'cubic-bezier(.5,0,.9,.6)', fill: 'both' });
+      }
+      k.later(st, () => ov.classList.add('shatter'), 1300);
+    } else if (a.fx === 'tentacle') {
+      add(H('div', { class: 'ar-o-wave' }), 1800);
+      const cnt = n(3, 4);
+      for (let i = 0; i < cnt; i++) {
+        const x = (0.15 + 0.7 * (i + 0.5) / cnt) * W;
+        const t = add(H('div', { class: 'ar-o-tentacle' + (i % 2 ? ' flip' : '') }, tentacleSVG()), 1900);
+        t.style.left = x + 'px'; t.style.animationDelay = (i * 0.1) + 's';
+      }
+      k.later(st, () => { for (let i = 0; i < 14; i++) { const d = add(H('div', { class: 'ar-o-drop' }), 900); d.style.left = (tg.x + rnd(-tg.bw * 0.6, tg.bw * 0.6)) + 'px'; d.style.top = tg.y + 'px'; anim(d, [{ transform: 'translate(0,0)', opacity: 1 }, { transform: 'translate(' + rnd(-90, 90) + 'px,' + rnd(-150, -40) + 'px)', opacity: 0 }], { duration: 800, easing: 'cubic-bezier(.2,.7,.4,1)', fill: 'forwards' }); } }, 950);
+    } else if (a.fx === 'thunder') {
+      tint('storm', 1900);
+      const bolts = n(3, 5);
+      for (let i = 0; i < bolts; i++) k.later(st, () => {
+        const x = i === bolts - 1 ? tg.x : rnd(0.1, 0.9) * W, y2 = i === bolts - 1 ? tg.y : rnd(0.6, 0.95) * Hh;
+        const b = add(boltSVG(x, y2, W, Hh), 420); b.setAttribute('class', 'ar-o-bolt');
+        fx('flash', '#ffffff', 90);
+      }, i * 170);
+    } else if (a.fx === 'shadow') {
+      tint('shadow', 2000);
+      const mx = c.x, my = c.y + c.bh * 0.05;
+      for (let i = 0; i < n(18, 28); i++) {
+        const f = add(H('div', { class: 'ar-o-flame' }), 1500);
+        f.style.left = mx + 'px'; f.style.top = my + 'px';
+        anim(f, [{ transform: 'translate(0,0) scale(.4)', opacity: 0 }, { transform: 'translate(' + ((tg.x - mx) * 0.3) + 'px,' + ((tg.y - my) * 0.3 + rnd(-30, 30)) + 'px) scale(1.1)', opacity: 1, offset: 0.3 }, { transform: 'translate(' + (tg.x - mx + rnd(-60, 60)) + 'px,' + (tg.y - my + rnd(-40, 20)) + 'px) scale(1.6)', opacity: 0 }], { duration: 900, delay: i * 30, easing: 'ease-out', fill: 'both' });
+      }
+    } else if (a.fx === 'missile') {
+      for (let i = 0; i < n(6, 9); i++) {
+        const m = add(H('div', { class: 'ar-o-missile' }), 1600);
+        const sx = c.x + (i % 2 ? 1 : -1) * c.bw * 0.4, sy = c.y - c.bh * 0.1;
+        const tx = tg.x + rnd(-tg.bw * 0.5, tg.bw * 0.5), ty = tg.y + rnd(-15, 15);
+        const mxp = (sx + tx) / 2 + rnd(-80, 80), myp = Math.min(sy, ty) - rnd(80, 160);
+        m.style.left = '0px'; m.style.top = '0px';
+        const d = 150 + i * 90;
+        anim(m, [{ transform: 'translate(' + sx + 'px,' + sy + 'px) rotate(-90deg)' }, { transform: 'translate(' + mxp + 'px,' + myp + 'px) rotate(0deg)' }, { transform: 'translate(' + tx + 'px,' + ty + 'px) rotate(90deg)' }], { duration: 650, delay: d, easing: 'ease-in', fill: 'both' });
+        k.later(st, () => { m.remove(); const bm = add(H('div', { class: 'ar-o-boom crit' }), 650); bm.style.left = tx + 'px'; bm.style.top = ty + 'px'; }, d + 650);
+      }
+    } else if (a.fx === 'chaos') {
+      const p = add(H('div', { class: 'ar-o-portal' }), 2200); p.style.left = (W * 0.5) + 'px'; p.style.top = (Hh * 0.12) + 'px';
+      replay(st.scene, 'glitch');
+      const cols = ['#ff6b6b', '#ffd43b', '#69db7c', '#4dabf7', '#da77f2'];
+      for (let i = 0; i < n(7, 12); i++) {
+        const x = rnd(0.1, 0.9) * W, y = rnd(0.55, 0.95) * Hh, d = 450 + i * 80;
+        const m = add(H('div', { class: 'ar-o-meteor chaos' }), d + 600); m.style.left = x + 'px'; m.style.top = y + 'px'; m.style.setProperty('--mc', cols[i % cols.length]);
+        anim(m, [{ transform: 'translate(' + (W * 0.5 - x) + 'px,' + (Hh * 0.12 - y) + 'px) scale(.3)' }, { transform: 'translate(0,0) scale(1)' }], { duration: 500, delay: d, easing: 'ease-in', fill: 'both' });
+        k.later(st, () => { m.remove(); const bm = add(H('div', { class: 'ar-o-boom crit' }), 650); bm.style.left = x + 'px'; bm.style.top = y + 'px'; }, d + 500);
+      }
+    }
+  }
+  function tentacleSVG() {
+    const S = K().S;
+    return S('svg', { viewBox: '0 0 60 220', class: 'ar-o-tentsvg', 'aria-hidden': 'true' },
+      S('path', { d: 'M30 220 C 8 170, 52 130, 26 80 S 40 20, 30 4', fill: 'none', stroke: '#364fc7', 'stroke-width': 22, 'stroke-linecap': 'round' }),
+      S('path', { d: 'M30 220 C 8 170, 52 130, 26 80 S 40 20, 30 4', fill: 'none', stroke: '#748ffc', 'stroke-width': 10, 'stroke-linecap': 'round', opacity: 0.7 }),
+      [190, 160, 130, 100, 70, 44].map((y, i) => S('circle', { cx: i % 2 ? 22 : 36, cy: y, r: 4.5 - i * 0.4, fill: '#e5dbff', stroke: '#364fc7', 'stroke-width': 1.5 })));
+  }
+  function boltSVG(x, y2, W, Hh) {
+    const S = K().S; const pts = []; const segs = 7; let px = x + rnd(-60, 60);
+    for (let i = 0; i <= segs; i++) { const y = y2 * i / segs; pts.push((i === segs ? x : px) + ',' + y); px += rnd(-45, 45); }
+    return S('svg', { viewBox: '0 0 ' + W + ' ' + Hh, width: W, height: Hh, 'aria-hidden': 'true' },
+      S('polyline', { points: pts.join(' '), fill: 'none', stroke: '#fff3bf', 'stroke-width': 14, 'stroke-linejoin': 'round', opacity: 0.45 }),
+      S('polyline', { points: pts.join(' '), fill: 'none', stroke: '#ffffff', 'stroke-width': 5, 'stroke-linejoin': 'round' }));
   }
   function shards(st, n) {
     const k = K(), H = k.H; if (reduced()) return;
@@ -863,6 +976,11 @@
     if (st.first) st.atkKey = laKey;
     else if (laKey && laKey !== st.atkKey) { st.atkKey = laKey; playerCounter(st, la); }
     const status = S2(s.status); const phase = S2(s.phase);
+    if (st.pStatus !== undefined && st.pStatus !== status && status === 'defeat' && !st.first) {
+      const ov = H('div', { class: 'ar-o-phit big', 'aria-hidden': 'true' }, crackSVG(1, 80, 40), H('div', { class: 'ar-o-phit-box' }, H('small', { text: '보스의 마지막 공격' }), H('b', { text: '방패가 깨졌어요' }), H('span', { text: '결과는 선생님 화면에서 확인해요' })));
+      (document.body || st.strip).append(ov); setTimeout(() => ov.remove(), 2400); vibrate([300, 100, 300]); snd('defeat');
+    }
+    st.pStatus = status;
     k.cls(st.face, 'angry', phase === 'angry'); k.cls(st.face, 'rage', phase === 'rage'); k.cls(st.face, 'victory', status === 'victory'); k.cls(st.face, 'defeat', status === 'defeat');
     const d = A(s.defeated).length;
     const ended = status === 'victory' || status === 'defeat' || (v && v.phase === 'finished');
@@ -880,8 +998,9 @@
   }
   function phoneHit(st, la) {
     const k = K(), H = k.H; const dmg = Math.max(0, N(la.dmg));
-    const ov = H('div', { class: 'ar-o-phit' + (dmg >= 12 ? ' big' : ''), 'aria-hidden': 'true' }, crackSVG(k.clamp(dmg / 25, 0.5, 1), 80, 40),
-      H('div', { class: 'ar-o-phit-box' }, H('small', { text: '오답! 보스의 반격' }), H('b', { text: '방패 -' + fmt(dmg) }), H('span', { text: '다음 문제는 꼭 맞혀서 막아요!' })));
+    const atk = atkOf(Math.max(1, Math.round(N(la.level, 1))));
+    const ov = H('div', { class: 'ar-o-phit atk-' + atk.fx + (dmg >= 12 ? ' big' : ''), 'aria-hidden': 'true' }, crackSVG(k.clamp(dmg / 25, 0.5, 1), 80, 40),
+      H('div', { class: 'ar-o-phit-box' }, H('em', { class: 'ar-o-phit-atk', text: atk.name }), H('small', { text: '오답! 보스의 반격' }), H('b', { text: '방패 -' + fmt(dmg) }), H('span', { text: '다음 문제는 꼭 맞혀서 막아요!' })));
     (document.body || st.strip).append(ov); setTimeout(() => ov.remove(), reduced() ? 1600 : 2100);
     replay(st.strip, 'quake'); replay(st.face, 'roarp'); snd('boom'); setTimeout(() => snd('wrong'), 200);
     vibrate([200, 80, 200]);

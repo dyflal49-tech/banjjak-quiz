@@ -555,3 +555,73 @@
 .ar-o-bsvg .bbody>path{filter:drop-shadow(0 0 2px rgba(0,0,0,.5))}
 @keyframes ar-o-mask{from{transform:translateY(1px)}to{transform:translateY(-3px) scale(1.015)}}
 @keyframes ar-o-visor{to{opacity:.72;filter:drop-shadow(0 0 13px currentColor)}}
+
+
+/* ===== v11: 보스별 공격 연출 ===== */
+.ar-o-btext.counter.atk-lava{color:#ff922b;-webkit-text-stroke:2px #5c1f00}
+.ar-o-btext.counter.atk-frost{color:#d0ebff;-webkit-text-stroke:2px #1864ab}
+.ar-o-btext.counter.atk-tentacle{color:#91a7ff;-webkit-text-stroke:2px #1b2a6e}
+.ar-o-btext.counter.atk-thunder{color:#ffe066;-webkit-text-stroke:2px #3b2f00}
+.ar-o-btext.counter.atk-shadow{color:#e599f7;-webkit-text-stroke:2px #24123b}
+.ar-o-btext.counter.atk-missile{color:#ced4da;-webkit-text-stroke:2px #c92a2a}
+.ar-o-btext.counter.atk-chaos{background:linear-gradient(90deg,#ff6b6b,#ffd43b,#69db7c,#4dabf7,#da77f2);-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-stroke:2px #fff}
+.ar-o-btext.counter[class*=atk-]{font-size:clamp(28px,10cqh,72px);z-index:40;left:50%!important;top:42%!important;animation:ar-o-atkname 2.2s cubic-bezier(.2,1.4,.4,1) forwards;text-shadow:0 0 24px rgba(0,0,0,.6)}
+@keyframes ar-o-atkname{0%{opacity:0;transform:translate(-50%,-50%) scale(2.4)}14%{opacity:1;transform:translate(-50%,-50%) scale(.95)}22%{transform:translate(-50%,-50%) scale(1)}80%{opacity:1;transform:translate(-50%,-50%) scale(1.04)}100%{opacity:0;transform:translate(-50%,-50%) scale(1.1)}}
+.ar-o-tint{position:absolute;inset:0;z-index:3;pointer-events:none;animation:ar-o-tint 1.8s ease forwards}
+.ar-o-tint.lava{background:radial-gradient(ellipse at 50% 110%,rgba(255,120,0,.6),rgba(180,30,0,.35) 60%,rgba(80,0,0,.2))}
+.ar-o-tint.storm{background:linear-gradient(180deg,rgba(10,10,40,.75),rgba(30,30,70,.4));animation-duration:1.9s}
+.ar-o-tint.shadow{background:radial-gradient(ellipse at 50% 40%,rgba(90,20,140,.35),rgba(20,0,40,.75))}
+.ar-o-tint.frost{background:radial-gradient(ellipse at 50% 50%,transparent 45%,rgba(200,235,255,.55) 75%,rgba(230,248,255,.9)),repeating-conic-gradient(from 10deg at 50% 50%,rgba(255,255,255,.18) 0 4deg,transparent 4deg 14deg);animation:ar-o-frost 2.2s ease forwards}
+.ar-o-tint.frost.shatter{animation:ar-o-shatter .6s ease-in forwards}
+.ar-o-tint.tentacle,.ar-o-tint.missile,.ar-o-tint.chaos{background:rgba(120,0,0,.35)}
+@keyframes ar-o-tint{0%{opacity:0}15%{opacity:1}75%{opacity:1}100%{opacity:0}}
+@keyframes ar-o-frost{0%{opacity:0;transform:scale(1.15)}30%{opacity:1;transform:scale(1)}100%{opacity:1}}
+@keyframes ar-o-shatter{0%{opacity:1;filter:brightness(1.6)}100%{opacity:0;transform:scale(1.25);filter:brightness(2)}}
+.ar-o-lava{position:absolute;width:4.5cqh;height:4.5cqh;min-width:16px;min-height:16px;margin:-2.25cqh 0 0 -2.25cqh;border-radius:50% 50% 50% 50%/60% 60% 40% 40%;background:radial-gradient(circle at 40% 35%,#fff3bf,#ff922b 35%,#e03131 70%,#5c0a00);box-shadow:0 0 18px 6px rgba(255,100,0,.65);z-index:12}
+.ar-o-splash{position:absolute;width:14cqh;height:6cqh;transform:translate(-50%,-50%);border-radius:50%;z-index:11;animation:ar-o-splash .7s ease-out forwards}
+.ar-o-splash.lava{background:radial-gradient(ellipse,#ffd43b 0,#ff6b00 40%,rgba(255,60,0,0) 70%)}
+@keyframes ar-o-splash{from{transform:translate(-50%,-50%) scale(.2);opacity:1}to{transform:translate(-50%,-50%) scale(1.6);opacity:0}}
+.ar-o-icespear{position:absolute;width:11cqh;height:2.2cqh;min-width:50px;min-height:9px;margin-top:-1.1cqh;transform-origin:0 50%;z-index:12;clip-path:polygon(0 50%,18% 0,100% 50%,18% 100%);background:linear-gradient(90deg,rgba(255,255,255,.4),#d0ebff 40%,#74c0fc 80%,#fff);filter:drop-shadow(0 0 6px #a5d8ff)}
+.ar-o-wave{position:absolute;left:-30%;right:-30%;bottom:-5%;height:38%;z-index:11;pointer-events:none;background:radial-gradient(ellipse at 50% 100%,rgba(28,126,214,.85),rgba(77,171,247,.5) 50%,transparent 72%);animation:ar-o-wave 1.7s ease-in-out forwards}
+@keyframes ar-o-wave{0%{transform:translateX(-40%) translateY(60%);opacity:0}30%{opacity:1}60%{transform:translateX(10%) translateY(0)}100%{transform:translateX(40%) translateY(40%);opacity:0}}
+.ar-o-tentacle{position:absolute;bottom:-4%;width:13cqh;min-width:44px;height:80%;transform-origin:50% 100%;z-index:13;animation:ar-o-tent 1.8s cubic-bezier(.3,1.2,.5,1) both}
+.ar-o-tentacle.flip{transform:scaleX(-1)}
+.ar-o-tentsvg{width:100%;height:100%;display:block;overflow:visible}
+@keyframes ar-o-tent{0%{transform:translateX(-50%) translateY(100%) rotate(0)}30%{transform:translateX(-50%) translateY(0) rotate(-14deg)}50%{transform:translateX(-50%) translateY(0) rotate(22deg)}62%{transform:translateX(-50%) translateY(6%) rotate(30deg)}85%{transform:translateX(-50%) translateY(10%) rotate(26deg);opacity:1}100%{transform:translateX(-50%) translateY(100%) rotate(10deg);opacity:0}}
+.ar-o-drop{position:absolute;width:10px;height:14px;margin:-7px 0 0 -5px;border-radius:50% 50% 50% 50%/65% 65% 35% 35%;background:#74c0fc;box-shadow:0 0 6px #d0ebff;z-index:14}
+.ar-o-bolt{position:absolute;inset:0;width:100%;height:100%;z-index:14;pointer-events:none;filter:drop-shadow(0 0 10px #ffe066);animation:ar-o-bolt .4s steps(2) forwards}
+@keyframes ar-o-bolt{0%{opacity:1}50%{opacity:.3}75%{opacity:1}100%{opacity:0}}
+.ar-o-flame{position:absolute;width:7cqh;height:7cqh;min-width:26px;min-height:26px;margin:-3.5cqh 0 0 -3.5cqh;border-radius:50% 50% 50% 0;background:radial-gradient(circle at 60% 40%,#f3d9fa,#be4bdb 35%,#5f3dc4 60%,rgba(20,0,40,0) 75%);z-index:12;mix-blend-mode:screen}
+.ar-o-missile{position:absolute;width:5.5cqh;height:1.8cqh;min-width:26px;min-height:9px;margin:-0.9cqh 0 0 -2.75cqh;border-radius:40% 60% 60% 40%/50%;background:linear-gradient(90deg,#868e96,#dee2e6 60%,#c92a2a 61%);z-index:13;box-shadow:-14px 0 10px 2px rgba(255,146,43,.9),-26px 0 16px 4px rgba(255,212,59,.5)}
+.ar-o-portal{position:absolute;width:34cqh;height:34cqh;transform:translate(-50%,-50%);border-radius:50%;z-index:9;background:conic-gradient(#ff6b6b,#ffd43b,#69db7c,#4dabf7,#da77f2,#ff6b6b);-webkit-mask:radial-gradient(circle,transparent 18%,#000 22%,#000 60%,transparent 70%);mask:radial-gradient(circle,transparent 18%,#000 22%,#000 60%,transparent 70%);animation:ar-o-portal 2.2s ease forwards}
+@keyframes ar-o-portal{0%{transform:translate(-50%,-50%) scale(0) rotate(0);opacity:0}20%{opacity:1;transform:translate(-50%,-50%) scale(1) rotate(180deg)}80%{opacity:1;transform:translate(-50%,-50%) scale(1.1) rotate(720deg)}100%{opacity:0;transform:translate(-50%,-50%) scale(.2) rotate(900deg)}}
+.ar-o-meteor.chaos{background:radial-gradient(circle at 35% 35%,#fff,var(--mc,#da77f2) 45%,#212529 80%);box-shadow:0 0 22px 8px var(--mc,#da77f2)}
+.ar-o-bscene.glitch{animation:ar-o-glitch 1.4s steps(6) both}
+@keyframes ar-o-glitch{0%,100%{filter:none}20%{filter:hue-rotate(90deg) saturate(1.6)}40%{filter:hue-rotate(200deg);transform:translateX(4px)}60%{filter:hue-rotate(300deg) contrast(1.3);transform:translateX(-4px)}80%{filter:hue-rotate(40deg)}}
+/* 학생 반격 화면: 공격 이름과 테마 색 */
+.ar-o-phit-atk{font-style:normal;font-weight:900;font-size:clamp(22px,7vw,40px);color:#fff;-webkit-text-stroke:2px #000;paint-order:stroke}
+.ar-o-phit.atk-lava{background:radial-gradient(circle,rgba(255,140,0,.3) 0,rgba(200,40,0,.8) 70%,rgba(90,10,0,.92) 100%)}
+.ar-o-phit.atk-frost{background:radial-gradient(circle,rgba(200,235,255,.25) 0,rgba(30,110,200,.8) 70%,rgba(10,40,90,.92) 100%)}
+.ar-o-phit.atk-tentacle{background:radial-gradient(circle,rgba(80,120,255,.25) 0,rgba(20,40,140,.82) 70%,rgba(5,10,60,.92) 100%)}
+.ar-o-phit.atk-thunder{background:radial-gradient(circle,rgba(255,240,150,.3) 0,rgba(40,40,90,.85) 70%,rgba(10,10,40,.94) 100%)}
+.ar-o-phit.atk-shadow{background:radial-gradient(circle,rgba(200,100,255,.25) 0,rgba(70,20,110,.85) 70%,rgba(20,0,40,.94) 100%)}
+.ar-o-phit.atk-chaos{background:conic-gradient(from 0deg,rgba(255,107,107,.75),rgba(255,212,59,.75),rgba(105,219,124,.75),rgba(77,171,247,.75),rgba(218,119,247,.75),rgba(255,107,107,.75))}
+/* ===== v11: 패배 대형 연출 ===== */
+.ar-o-defeat{position:fixed;inset:0;z-index:9500;pointer-events:none;overflow:hidden;display:grid;place-items:center;transition:opacity .7s ease}
+.ar-o-defeat.out{opacity:0}
+.ar-o-dred{position:absolute;inset:0;background:radial-gradient(circle at 50% 45%,rgba(120,0,0,.35),rgba(60,0,0,.88) 60%,rgba(10,0,0,.97));animation:ar-o-dred 1s ease both}
+@keyframes ar-o-dred{0%{opacity:0;background-color:#fff}10%{opacity:1}100%{opacity:1}}
+.ar-o-defeat .ar-o-cracks{z-index:3;animation:none;opacity:.9}
+.ar-o-dboss.ar-o-boss{position:absolute;left:50%;bottom:-6%;height:85vh;aspect-ratio:1;transform:translateX(-50%);z-index:2;animation:ar-o-dboss 1.6s cubic-bezier(.2,1.2,.4,1) both;filter:drop-shadow(0 0 40px rgba(255,0,0,.6))}
+@keyframes ar-o-dboss{0%{transform:translateX(-50%) translateY(40%) scale(.4);opacity:0}60%{transform:translateX(-50%) translateY(0) scale(1.08);opacity:.95}100%{transform:translateX(-50%) scale(1);opacity:.9}}
+.ar-o-dstamp{position:relative;z-index:4;display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center;animation:ar-o-dstamp .8s cubic-bezier(.2,1.7,.4,1) .9s both}
+.ar-o-dstamp b{font-size:clamp(90px,18vw,240px);font-weight:900;color:#ff4d4d;-webkit-text-stroke:6px #fff;paint-order:stroke;text-shadow:0 0 60px rgba(255,0,0,.9),0 14px 0 #2a0000;line-height:1;transform:rotate(-6deg)}
+.ar-o-dstamp span{font-size:clamp(28px,4.4vw,60px);font-weight:900;color:#fff;background:#c92a2a;border:4px solid #fff;border-radius:999px;padding:4px 28px;box-shadow:0 10px 30px rgba(0,0,0,.5)}
+.ar-o-dstamp small{font-size:clamp(18px,2.2vw,28px);font-weight:800;color:#ffc9c9}
+@keyframes ar-o-dstamp{0%{transform:scale(4) rotate(8deg);opacity:0}60%{transform:scale(.92) rotate(-2deg);opacity:1}100%{transform:none;opacity:1}}
+body.ar-o-quakepage{animation:ar-o-pagequake .9s cubic-bezier(.36,.07,.19,.97)}
+@keyframes ar-o-pagequake{10%,90%{transform:translate(-4px,2px)}20%,80%{transform:translate(10px,-6px)}30%,50%,70%{transform:translate(-18px,8px) rotate(-.6deg)}40%,60%{transform:translate(18px,-8px) rotate(.6deg)}}
+@media (prefers-reduced-motion: reduce){
+  .ar-o-defeat *,.ar-o-tint,.ar-o-bscene.glitch{animation:none!important}
+  body.ar-o-quakepage{animation:none}
+}

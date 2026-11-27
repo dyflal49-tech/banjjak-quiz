@@ -96,7 +96,7 @@ const modeOf = mid => MODES.find(m => m.id === mid);
 const TEAMS = [{ name: '빨강 팀', color: '#e21b3c' }, { name: '파랑 팀', color: '#1368ce' }, { name: '노랑 팀', color: '#d89e00' }, { name: '초록 팀', color: '#26890c' }];
 const MARBLE_COLORS = ['#e21b3c', '#1368ce', '#d89e00', '#26890c', '#864cbf', '#0aa3a3', '#ff7a00', '#e84393', '#2d3436', '#6c5ce7', '#00b894', '#fdcb6e'];
 const PLANETS = [['반짝성', 14, 22, 2], ['구름별', 38, 14, 1], ['얼음달', 66, 20, 2], ['불꽃성', 88, 30, 1], ['바다별', 22, 62, 1], ['숲속성', 50, 48, 3], ['무지개성', 80, 70, 2], ['모래달', 40, 82, 1], ['은하섬', 64, 86, 1]];
-const BOSS_LEVELS = ['화염의 군주 이그니스', '빙결 여제 프로스티아', '심연의 크라켄', '천둥 거신 볼테우스', '그림자 용 녹투르', '강철 파괴신 메카트론', '혼돈의 마왕 카오스'];
+const BOSS_LEVELS = ['화염의 군주 이그니스', '눈보라 마수 블리자르', '심연의 크라켄', '천둥 거신 볼테우스', '그림자 용 녹투르', '강철 파괴신 메카트론', '혼돈의 마왕 카오스'];
 const BOSSES = BOSS_LEVELS;
 
 // ---------- 실시간 게임 ----------
@@ -233,7 +233,10 @@ function setTimer(g, ms, fn) { clearTimer(g); g.timer = setTimeout(() => { try {
 function startGame(g) {
   if (g.phase !== 'lobby') return;
   if (!g.players.size) fail(400, '참가자가 1명 이상 있어야 시작할 수 있어요.');
-  const n = g.players.size, qn = g.questions.length;
+  const n = g.players.size;
+  g.loop = LOOP_MODES.has(g.mode); g.qRound = 0; g.qSeq = 0; g.gameEndsAt = null;
+  if (g.loop) { const avgT = g.questions.reduce((a, q) => a + q.timeLimit, 0) / g.questions.length; const perQ = avgT + (Number(g.options.autoAdvance) || 10) + 3 + 2; g.qEst = Math.max(g.questions.length, Math.round(g.options.duration / perQ)); }
+  const qn = g.loop ? g.qEst : g.questions.length;
   if (g.mode === 'garden') g.ms.goal = Math.max(5, Math.round(n * qn * 0.8));
   if (g.mode === 'boss') {
     // 보스 수는 문제 수에 맞춤(약 4문제에 1마리, 3~7마리). 전체 체력은 반 정답률 약 85%일 때 문제의 약 80% 지점에서 마지막 보스가 쓰러지게.
@@ -250,6 +253,8 @@ function startGame(g) {
 }
 function startQuestion(g) {
   const q = g.questions[g.qIndex];
+  g.qSeq = (g.qSeq || 0) + 1;
+  if (g.loop && !g.gameEndsAt) g.gameEndsAt = now() + g.options.duration * 1000;
   g.phase = 'question'; g.startAt = now(); g.endsAt = g.startAt + q.timeLimit * 1000; g.answers = new Map();
   for (const p of g.players.values()) { p.answeredNow = false; p.delta = 0; }
   setTimer(g, q.timeLimit * 1000, () => reveal(g)); touch(g);
@@ -274,7 +279,7 @@ function reveal(g) {
   }
   // 모드별 효과
   const accuracy = expected.length ? expected.filter(p => g.answers.get(p.id)?.correct).length / expected.length : 0;
-  const questionCount = g.questions.length;
+  const questionCount = g.loop ? (g.qEst || g.questions.length) : g.questions.length;
   if (q.type !== 'poll') {
     if (g.mode === 'submarine' && g.ms.status === 'diving') {
       const step = Math.round(g.ms.targetDepth / questionCount * 1.25 * accuracy);
@@ -305,7 +310,7 @@ function reveal(g) {
       g.ms.lastBloom = { q: g.qIndex, count: answeredList.filter(a => a.correct).length, accuracy: Math.round(accuracy * 100), at: now() };
       if (g.ms.bloomed >= g.ms.goal && g.ms.status !== 'success') { g.ms.status = 'success'; addFeed(g, '우리반', '목표 달성! 꽃밭이 가득 찼어요'); }
     }
-    if (g.mode === 'boss' && g.ms.status === 'fighting' && g.ms.cleared && g.qIndex > g.ms.clearedQ) {
+    if (g.mode === 'boss' && g.ms.status === 'fighting' && g.ms.cleared && (g.qSeq || 0) > (g.ms.clearedSeq ?? g.ms.clearedQ)) {
       // 모든 보스 처치 뒤: 맞힌 학생이 보스가 남긴 보물을 가져감
       const got = [];
       for (const a of answeredList.filter(a => a.correct).sort((x, y) => x.elapsed - y.elapsed)) {
@@ -330,7 +335,7 @@ function reveal(g) {
         if (g.ms.bossHp <= 0) {
           g.ms.finisher = { nickname: p?.nickname || '', avatar: p?.avatar || null }; g.ms.defeated.push({ level: g.ms.level, name: g.ms.bossName, finisher: g.ms.finisher });
           addFeed(g, p?.nickname || '', `${g.ms.level}단계 보스 처치! 마지막 일격`);
-          if (g.ms.level >= g.ms.bossCount) { g.ms.cleared = true; g.ms.clearedAt = now(); g.ms.clearedQ = g.qIndex; g.ms.lastAttack = null; addFeed(g, '우리반', `보스 ${g.ms.bossCount}마리 모두 처치! 보물 창고가 열렸어요`); break; }
+          if (g.ms.level >= g.ms.bossCount) { g.ms.cleared = true; g.ms.clearedAt = now(); g.ms.clearedQ = g.qIndex; g.ms.clearedSeq = g.qSeq || 0; g.ms.lastAttack = null; addFeed(g, '우리반', `보스 ${g.ms.bossCount}마리 모두 처치! 보물 창고가 열렸어요`); break; }
           g.ms.level++; g.ms.bossName = BOSS_LEVELS[(g.ms.level - 1) % BOSS_LEVELS.length];
           g.ms.bossMaxHp = g.ms.hpList[g.ms.level - 1]; g.ms.bossHp = g.ms.bossMaxHp; g.ms.spawnAt = now(); g.ms.phase = 'normal';
           addFeed(g, g.ms.bossName, `${g.ms.level}단계 보스 등장! 더 강해졌어요`, false);
@@ -366,7 +371,9 @@ function reveal(g) {
       else { const above = ranked[p.rank - 2]; p.result.message = `${above.nickname} 님과 ${Math.max(0, above.score - p.score)}점 차이예요.`; }
     }
   }
-  g.stats[g.qIndex] = { questionId: q.id, text: q.text, type: q.type, answered: answeredList.length, correct: correctCount, expected: expected.length };
+  const prevSt = g.stats[g.qIndex];
+  if (g.loop && g.qRound > 0 && prevSt) { prevSt.answered += answeredList.length; prevSt.correct += correctCount; prevSt.expected = (prevSt.expected || 0) + expected.length; prevSt.rounds = (prevSt.rounds || 1) + 1; }
+  else g.stats[g.qIndex] = { questionId: q.id, text: q.text, type: q.type, answered: answeredList.length, correct: correctCount, expected: expected.length };
   scheduleAuto(g);
   touch(g);
 }
@@ -375,6 +382,11 @@ function advance(g) {
   for (const p of g.players.values()) { p.actions = null; }
   if (g.mode === 'boss' && g.ms.status === 'defeat') return finish(g);
   if (g.mode === 'marble' && g.qIndex + 1 >= g.questions.length) return startRace(g);
+  if (g.loop) {
+    if (g.gameEndsAt && now() >= g.gameEndsAt) return finish(g);
+    let next = g.qIndex + 1; if (next >= g.questions.length) { next = 0; g.qRound = (g.qRound || 0) + 1; }
+    g.qIndex = next; g.phase = 'countdown'; g.endsAt = now() + 3000; setTimer(g, 3000, () => startQuestion(g)); touch(g); return;
+  }
   if (g.qIndex + 1 < g.questions.length) { g.qIndex++; g.phase = 'countdown'; g.endsAt = now() + 3000; setTimer(g, 3000, () => startQuestion(g)); touch(g); }
   else finish(g);
 }
@@ -399,6 +411,8 @@ function startRun(g) {
 }
 // ---------- 카훗형 모드 공통 ----------
 const ARENA_MODES = new Set(['robot', 'submarine', 'kingdom', 'space']);
+// 진행자가 넘기지만 정한 게임 시간 동안 문제를 처음부터 반복하는 모드
+const LOOP_MODES = new Set(['garden', 'boss']);
 const CHASE = { startGap: 40000, gapMax: 60000, symPeriod: 3500 };
 const KINGDOM = { cols: 13, rows: 9, castles: [[2, 6], [10, 2], [2, 2], [10, 6]] };
 const TOWER = { bonusEvery: 10 };
@@ -942,6 +956,7 @@ function hostView(g) {
     joinUrls: addresses().length ? addresses() : [`http://localhost:${PORT}`], locked: g.locked, options: g.options, reportId: g.reportId,
     players: ranked.map(p => ({ id: p.id, nickname: p.nickname, team: p.team, score: p.score, correct: p.correct, connected: p.conns > 0, answered: g.answers.has(p.id), avatar: p.avatar || null })), playerCount: ranked.length, autoAt: g.autoAt || null,
     teams: teamSummary(g), questionIndex: g.qIndex, questionCount: g.questions.length,
+    loop: !!g.loop || LOOP_MODES.has(g.mode), gameEndsAt: g.gameEndsAt || null, questionRound: g.qRound || 0, questionSeq: g.qSeq || 0, gameDuration: g.options.duration,
     question: q ? hostQuestion(g, q, revealed) : null, endsAt: g.endsAt,
     answeredCount: g.phase === 'question' ? g.answers.size : (rev?.answered ?? 0), expectedCount: g.phase === 'question' ? expectedPlayers(g).length : 0,
     reveal: rev, leaderboard: ['leaderboard', 'finished'].includes(g.phase) || g.mode === 'classic' || g.mode === 'marble' ? leaderboard(g) : [],

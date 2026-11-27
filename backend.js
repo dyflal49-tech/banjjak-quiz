@@ -146,11 +146,23 @@
   const hosts = new Map();
   E.HOOKS.touch = g => { const h = hosts.get(g.pin); if (!h || h.flushT || h.closed) return; h.flushT = setTimeout(() => { h.flushT = null; flush(h); }, 50); };
   E.HOOKS.report = (g, report) => { col('kq_reports').doc(report.id).set(JSON.parse(JSON.stringify(report))).catch(e => KQ.toast('리포트를 저장하지 못했어요: ' + friendly(e).message, true)); };
-  function publicDoc(hv) { const { role, serverNow, ...rest } = hv; return rest; }
+  function publicDoc(hv) {
+    const { role, serverNow, ...rest } = hv;
+    // 최종 결과는 선생님 화면에서만: 게임이 끝나면 학생이 받는 공개 문서에서 순위·점수·시상 정보를 뺌
+    if (rest.phase === 'finished') {
+      rest.podium = []; rest.leaderboard = []; rest.feed = [];
+      rest.players = (rest.players || []).map(p => ({ id: p.id, nickname: p.nickname, avatar: p.avatar || null, team: p.team })).sort((a, b) => String(a.nickname).localeCompare(String(b.nickname), 'ko')); // 순위 순서가 드러나지 않게 이름순
+      rest.teams = Array.isArray(rest.teams) ? rest.teams.map(t => ({ index: t.index, name: t.name, color: t.color })) : rest.teams;
+      rest.modeState = { kind: (rest.modeState && rest.modeState.kind) || null, ended: true };
+    }
+    return rest;
+  }
   function playerDoc(g, h, u) {
     const v = E.playerView(g, u);
     const me = v.me ? { ...v.me } : null; if (me) { delete me.rank; delete me.playerCount; }
-    return { k: g.phase + ':' + g.qIndex, me, question: v.question, answered: !!v.answered, lockedUntil: v.lockedUntil || null, result: v.result || null, actions: v.actions || null, questionStartedAt: v.questionStartedAt || null, kicked: !!v.kicked, reply: h.replies.get(u) || null };
+    const done = g.phase === 'finished';
+    if (me && done) { for (const k of ['score', 'correct', 'answered', 'stats', 'streak']) delete me[k]; }
+    return { k: g.phase + ':' + g.qIndex, me, question: v.question, answered: !!v.answered, lockedUntil: v.lockedUntil || null, result: done ? null : (v.result || null), actions: v.actions || null, questionStartedAt: v.questionStartedAt || null, kicked: !!v.kicked, reply: h.replies.get(u) || null };
   }
   let writeErrorShown = 0;
   function onWriteError(e) { if (Date.now() - writeErrorShown > 8000) { writeErrorShown = Date.now(); KQ.toast('학생 화면으로 보내지 못했어요: ' + friendly(e).message, true); } console.error(e); }
@@ -184,7 +196,7 @@
   function serialize(h) {
     const g = h.g;
     return { pin: g.pin, quizId: g.quizId, quizTitle: g.quizTitle, mode: g.mode, modeName: g.modeName, pacing: g.pacing, options: g.options, questions: g.questions, phase: g.phase, locked: g.locked, createdAt: g.createdAt,
-      qIndex: g.qIndex, endsAt: g.endsAt, startAt: g.startAt, players: [...g.players.values()], kicked: [...g.kicked], answers: [...g.answers.values()], stats: g.stats, feed: g.feed, teams: g.teams, ms: g.ms, reportId: g.reportId, resultSeq: g.resultSeq,
+      qIndex: g.qIndex, endsAt: g.endsAt, loop: !!g.loop, gameEndsAt: g.gameEndsAt || null, qRound: g.qRound || 0, qSeq: g.qSeq || 0, qEst: g.qEst || 0, startAt: g.startAt, players: [...g.players.values()], kicked: [...g.kicked], answers: [...g.answers.values()], stats: g.stats, feed: g.feed, teams: g.teams, ms: g.ms, reportId: g.reportId, resultSeq: g.resultSeq,
       autoAt: g.autoAt || null, lastTs: h.lastTs, processed: [...h.processed].slice(-1500) };
   }
   function restore(s) {
@@ -341,13 +353,14 @@
   function compose(pin, gd, pd) {
     const fresh = pd && pd.k === gd.phase + ':' + gd.questionIndex;
     const me = pd && pd.me ? { ...pd.me } : null;
-    if (me) { const idx = (gd.players || []).findIndex(p => p.id === me.id); me.rank = idx >= 0 ? idx + 1 : (gd.playerCount || 1); me.playerCount = gd.playerCount || 1; }
+    const over = gd.phase === 'finished';
+    if (me) { const idx = (gd.players || []).findIndex(p => p.id === me.id); me.rank = over ? null : (idx >= 0 ? idx + 1 : (gd.playerCount || 1)); me.playerCount = gd.playerCount || 1; }
     return {
       role: 'player', pin: String(pin), mode: gd.mode, modeName: gd.modeName, pacing: gd.pacing, phase: gd.phase, serverNow: Date.now(), quizTitle: gd.quizTitle,
       kicked: !!(pd && pd.kicked), endsAt: gd.endsAt, autoAt: gd.autoAt || null, modeState: gd.modeState || {}, me,
       question: fresh ? pd.question : null, answered: fresh ? !!pd.answered : false, lockedUntil: pd ? pd.lockedUntil : null,
       result: fresh || gd.pacing === 'player' ? (pd && pd.result) || null : null, actions: fresh ? pd.actions : null, questionStartedAt: pd ? pd.questionStartedAt : null,
-      leaderboard: (gd.mode === 'classic' || gd.mode === 'marble') && ['leaderboard', 'finished'].includes(gd.phase) ? gd.leaderboard || [] : [], podium: gd.phase === 'finished' ? gd.podium || [] : []
+      leaderboard: !over && (gd.mode === 'classic' || gd.mode === 'marble') && gd.phase === 'leaderboard' ? gd.leaderboard || [] : [], podium: []
     };
   }
 

@@ -450,6 +450,69 @@
       const out = c.destination, t = c.currentTime + 0.01;
       kick(c, out, t, 0.32, 95, 28, 0.9);
       noiseHit(c, out, t, { type: 'lowpass', f: 900, f2: 90, fd: 0.8, v: 0.22, d: 1.0 });
+    },
+    // v11: 1위 발표 직전 3초 긴장 드럼롤 (점점 빠르고 크게 + 상승음 + 마지막 심벌)
+    suspense(c) {
+      const out = c.destination, t0 = c.currentTime + 0.02, L = 2.85;
+      let t = 0;
+      while (t < L) { const p = t / L; noiseHit(c, out, t0 + t, { type: 'bandpass', f: 1500 + 700 * p, q: 0.8, v: 0.015 + 0.07 * p, d: 0.06 }); t += 0.075 - 0.045 * p; }
+      voice(c, out, t0, 196, L, { w: 'sawtooth', v: 0.018, a: 0.4, r: 0.1, lp: 900, glide: 1, sus: 1 });
+      voice(c, out, t0 + 0.3, 220, L - 0.3, { w: 'triangle', v: 0.03, a: 1.2, r: 0.1, glide: 0.5, gdt: L - 0.3, sus: 1 });
+      [0, 1.2, 2.1, 2.55].forEach(x => kick(c, out, t0 + x, 0.12 + x * 0.04, 110, 45, 0.35));
+      noiseHit(c, out, t0 + L + 0.1, { type: 'highpass', f: 3200, v: 0.11, a: 0.003, d: 1.6 });
+      kick(c, out, t0 + L + 0.1, 0.35, 130, 38, 0.7);
+    },
+    // v11: 패배 - 무거운 쿵 + 내려가는 금관 "와-와-와-와아"
+    defeat(c) {
+      const out = c.destination, t0 = c.currentTime + 0.02;
+      kick(c, out, t0, 0.45, 90, 25, 1.4);
+      noiseHit(c, out, t0, { type: 'lowpass', f: 700, f2: 60, fd: 1.6, v: 0.28, d: 1.8 });
+      [[392, 0.45], [370, 0.45], [349, 0.45], [330, 1.6]].forEach(([fr, d], i) => voice(c, out, t0 + 0.55 + i * 0.5, fr, d, { w: 'sawtooth', v: 0.05, lp: 1100, vib: i === 3 ? 30 : 0, r: 0.35, det: 8 }));
+      voice(c, out, t0 + 0.55, 98, 3.2, { w: 'sine', v: 0.06, r: 0.6, glide: 1.3, gdt: 3 });
+    },
+    'atk-lava'(c) {
+      const out = c.destination, t = c.currentTime + 0.02;
+      noiseHit(c, out, t, { type: 'lowpass', f: 400, f2: 120, fd: 1.2, v: 0.2, a: 0.2, d: 1.3 });
+      for (let i = 0; i < 10; i++) noiseHit(c, out, t + 0.3 + i * 0.09 + Math.random() * 0.05, { type: 'highpass', f: 4500, v: 0.035, d: 0.12 });
+      kick(c, out, t + 0.9, 0.3, 80, 30, 0.6);
+    },
+    'atk-ice'(c) {
+      const out = c.destination, t = c.currentTime + 0.02;
+      [2637, 3136, 3951, 2349, 4186].forEach((fr, i) => voice(c, out, t + i * 0.07, fr, 0.03, { w: 'sine', v: 0.035, a: 0.002, r: 0.5, sus: 0.5 }));
+      noiseHit(c, out, t, { type: 'bandpass', f: 6000, f2: 2500, fd: 0.5, q: 2, v: 0.08, a: 0.25, d: 0.4 });
+      noiseHit(c, out, t + 0.75, { type: 'highpass', f: 2500, v: 0.16, a: 0.002, d: 0.5 });
+      [1760, 2217, 2960].forEach((fr, i) => voice(c, out, t + 0.75 + i * 0.03, fr, 0.02, { w: 'triangle', v: 0.04, r: 0.3 }));
+    },
+    'atk-water'(c) {
+      const out = c.destination, t = c.currentTime + 0.02;
+      noiseHit(c, out, t, { type: 'bandpass', f: 300, f2: 1400, fd: 0.6, q: 1.2, v: 0.14, a: 0.3, d: 0.5 });
+      kick(c, out, t + 0.85, 0.35, 70, 28, 0.8);
+      noiseHit(c, out, t + 0.85, { type: 'lowpass', f: 2000, f2: 200, fd: 1, v: 0.2, a: 0.01, d: 1.1 });
+    },
+    'atk-thunder'(c) {
+      const out = c.destination, t = c.currentTime + 0.02;
+      [0, 0.32, 0.6].forEach((x, i) => { noiseHit(c, out, t + x, { type: 'highpass', f: 1800, v: 0.2 - i * 0.04, a: 0.001, d: 0.18 }); });
+      noiseHit(c, out, t + 0.1, { type: 'lowpass', f: 260, f2: 60, fd: 2, v: 0.25, a: 0.08, d: 2.2 });
+      kick(c, out, t + 0.05, 0.3, 70, 25, 1);
+    },
+    'atk-flame'(c) {
+      const out = c.destination, t = c.currentTime + 0.02;
+      noiseHit(c, out, t, { type: 'bandpass', f: 500, f2: 1800, fd: 0.5, q: 0.7, v: 0.18, a: 0.15, d: 1.2 });
+      voice(c, out, t, 110, 1, { w: 'sawtooth', v: 0.04, lp: 500, glide: 0.6, gdt: 0.8, r: 0.3 });
+    },
+    'atk-missile'(c) {
+      const out = c.destination, t = c.currentTime + 0.02;
+      for (let i = 0; i < 5; i++) {
+        voice(c, out, t + i * 0.12, 1800, 0.55, { w: 'sine', v: 0.02, glide: 0.4, gdt: 0.55, r: 0.05 });
+        kick(c, out, t + 0.7 + i * 0.12, 0.22, 100, 30, 0.45);
+        noiseHit(c, out, t + 0.7 + i * 0.12, { type: 'lowpass', f: 1500, f2: 150, fd: 0.4, v: 0.12, d: 0.45 });
+      }
+    },
+    'atk-chaos'(c) {
+      const out = c.destination, t = c.currentTime + 0.02;
+      [880, 622, 440, 311].forEach((fr, i) => voice(c, out, t + i * 0.12, fr, 0.6, { w: 'square', v: 0.025, lp: 2400, glide: 1.5, gdt: 0.5, det: 25, r: 0.2 }));
+      noiseHit(c, out, t + 0.2, { type: 'bandpass', f: 200, f2: 3000, fd: 0.8, q: 3, v: 0.1, a: 0.3, d: 0.8 });
+      [1.0, 1.15, 1.35].forEach(x => { kick(c, out, t + x, 0.3, 90, 28, 0.6); noiseHit(c, out, t + x, { type: 'lowpass', f: 900, f2: 90, fd: 0.7, v: 0.16, d: 0.7 }); });
     }
   };
   const origPlay = sound.play;
