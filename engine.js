@@ -275,7 +275,7 @@ function reveal(g) {
     if (!a) { const lost = p.streak >= 2; p.streak = 0; p.result = { seq: g.resultSeq, correct: false, points: 0, streak: 0, lostStreak: lost, answerText: answerText(q), message: '시간이 끝났어요. 다음 문제는 꼭 도전해요!', missed: true }; continue; }
     if (a.correct) correctCount++;
     p.result = { seq: g.resultSeq, correct: a.correct, points: a.points, streak: p.streak, lostStreak: !!a.lostStreak, answerText: answerText(q) };
-    if (g.mode === 'marble' && a.mg) p.result.marbleMsg = `구슬 +${a.mg.count}개` + (a.mg.gold ? ' (빠른 정답 황금 구슬 포함)' : '') + (a.mg.streak ? ' 연속 정답 보너스!' : '');
+    if (g.mode === 'marble' && a.mg) p.result.marbleMsg = a.mg.count ? '정답 3개 달성! 구슬 +1개' + (a.mg.gold ? ' (빠른 정답이라 황금 구슬)' : '') : `구슬까지 정답 ${3 - a.mg.prog}개 더!`;
   }
   // 모드별 효과
   const accuracy = expected.length ? expected.filter(p => g.answers.get(p.id)?.correct).length / expected.length : 0;
@@ -359,7 +359,7 @@ function reveal(g) {
       }
     }
   }
-  if (g.mode === 'marble') { const items = answeredList.filter(a => a.mg).map(a => { const p = g.players.get(a.playerId); return { nickname: p ? p.nickname : '', count: a.mg.count, gold: a.mg.gold }; }); g.ms.lastGain = { q: g.qIndex, items, at: now() }; }
+  if (g.mode === 'marble') { const items = answeredList.filter(a => a.mg && a.mg.count > 0).map(a => { const p = g.players.get(a.playerId); return { nickname: p ? p.nickname : '', count: a.mg.count, gold: a.mg.gold }; }); g.ms.lastGain = { q: g.qIndex, items, at: now() }; }
   const ranked = ranking(g);
   for (const p of ranked) {
     if (!p.result) continue; p.result.rank = p.rank; p.result.prevRank = p.lastRank ?? null; p.boardPrevRank = p.lastRank ?? null; p.lastRank = p.rank;
@@ -390,9 +390,18 @@ function advance(g) {
   if (g.qIndex + 1 < g.questions.length) { g.qIndex++; g.phase = 'countdown'; g.endsAt = now() + 3000; setTimer(g, 3000, () => startQuestion(g)); touch(g); }
   else finish(g);
 }
+// v12: 보스 반격 장면이 끝나고 1초 뒤에 넘어가도록 (진행자 화면이 장면 끝 시각을 알려 줌)
+function holdUntil(g) { try { return g.mode === 'boss' && HOOKS.holdUntil ? Number(HOOKS.holdUntil(g)) || 0 : 0; } catch { return 0; } }
+function deferNext(g) {
+  const at = holdUntil(g) + 1000; if (at <= now()) return false;
+  clearAuto(g); g.autoAt = at; const qi = g.qIndex;
+  g.autoTimer = setTimeout(() => { g.autoTimer = null; g.autoAt = null; if (g.phase === 'reveal' && g.qIndex === qi) { try { hostNext(g); } catch (e) { console.error('넘김 오류', e.message); } } }, at - now());
+  touch(g); return true;
+}
 function hostNext(g) {
   if (g.phase === 'lobby') return startGame(g);
   if (g.phase === 'question') return reveal(g);
+  if (g.phase === 'reveal' && deferNext(g)) return;
   clearAuto(g);
   if (g.phase === 'reveal') { if (g.mode === 'classic' || g.mode === 'marble') { g.phase = 'leaderboard'; for (const p of g.players.values()) p.actions = null; scheduleAuto(g); touch(g); return; } return advance(g); }
   if (g.phase === 'leaderboard') return advance(g);
@@ -892,7 +901,10 @@ function submitAnswer(g, p, questionId, answer, meta) {
     if (q.type !== 'poll') p.answered++;
     p.score += points; p.delta = points; p.reachedAt = now();
     let mg = null;
-    if (g.mode === 'marble' && ev.correct) { const fast = elapsed <= q.timeLimit * 1000 / 3; const extra = p.streak >= 3 ? 1 : 0; mg = { count: 1 + (fast ? 1 : 0) + extra, gold: fast ? 1 : 0, streak: extra }; stat(p, 'marbles', mg.count); if (fast) stat(p, 'gold'); }
+    if (g.mode === 'marble' && ev.correct) { // v12: 정답 3개(연속 아니어도)마다 구슬 1개, 3번째 정답이 빠르면 황금 구슬
+      const fast = elapsed <= q.timeLimit * 1000 / 3; const prog = p.correct % 3;
+      if (prog === 0) { mg = { count: 1, gold: fast ? 1 : 0, prog: 0 }; stat(p, 'marbles'); if (fast) stat(p, 'gold'); } else mg = { count: 0, gold: 0, prog };
+    }
     g.answers.set(p.id, { playerId: p.id, value: ev.value, correct: ev.correct, points, elapsed, lostStreak, mg });
     if (g.answers.size >= expectedPlayers(g).length) reveal(g); else touch(g);
     return {};

@@ -441,6 +441,9 @@
   // =====================================================================
   const BOSS_PAL = [['#8e5bd6', '#b794f6', '#3b1d6e'], ['#ff6b6b', '#ffc9c9', '#7a1f1f'], ['#5c7cfa', '#bac8ff', '#1b2a6e'], ['#2f9e44', '#b2f2bb', '#0b3d1a'], ['#343a40', '#ffd43b', '#000000'], ['#e8590c', '#ffd8a8', '#5c1f00'], ['#0ca678', '#96f2d7', '#063d30'], ['#c2255c', '#fcc2d7', '#4a0a24']];
   // v11: 보스마다 공격 이름에 맞는 연출(fx)·효과음(sfx). id 는 보스 몸 동작 CSS
+  // v12: 보스 장면(반격·처치 후 등장·패배)이 끝나는 시각. 엔진이 이 시각 + 1초 뒤에 다음 문제로 넘김
+  let bossAtkEnd = 0;
+  try { if (window.KQEngine && KQEngine.HOOKS) KQEngine.HOOKS.holdUntil = g => (g && g.mode === 'boss' ? bossAtkEnd : 0); } catch { /* 무시 */ }
   const ATTACKS = [
     { id: 'meteor', fx: 'lava', name: '용암 폭우!', hit: 1150, sfx: 'atk-lava' },
     { id: 'slam', fx: 'frost', name: '눈보라 얼음창!', hit: 950, sfx: 'atk-ice' },
@@ -598,13 +601,15 @@
       if (!levelUp) k.later(st, () => { if (!st.arriving) { const s2 = mState(st.v); setHp(st, Math.max(0, N(s2.bossHp, hp)), Math.max(1, N(s2.bossMaxHp, maxHp))); } }, batchEnd - t + 50);
     }
     let afterMs = Math.max(0, batchEnd - t);
-    if (levelUp) { afterMs += arrive(st, prevLv, lv, afterMs); st.busyUntil = t + afterMs; }
+    if (levelUp) { afterMs += arrive(st, prevLv, lv, afterMs); st.busyUntil = t + afterMs; if (!st.first) bossAtkEnd = Math.max(bossAtkEnd, Date.now() + afterMs); }
     // 반격
     const la = s.lastAttack; const laKey = la ? N(la.q) + '|' + N(la.at) : null;
     const shield = k.clamp(N(s.shield, 100), 0, 100);
     if (laKey && laKey !== st.atkKey && !st.first) {
       st.atkKey = laKey;
-      k.later(st, () => counter(st, la, shield, Math.max(1, Math.round(N(la.level, lvOf(mState(st.v)))))), afterMs + 200);
+      const atLv = Math.max(1, Math.round(N(la.level, lvOf(mState(st.v)))));
+      k.later(st, () => counter(st, la, shield, atLv), afterMs + 200);
+      bossAtkEnd = Math.max(bossAtkEnd, Date.now() + afterMs + 200 + 450 + atkOf(atLv).hit + 2000); // v12: 반격 장면이 끝나는 시각
       afterMs += 2400;
     } else {
       if (st.first) st.atkKey = laKey;
@@ -635,7 +640,7 @@
           if (play) { replay(st.scene, 'quake'); defeatFx(st); for (let i = 0; i < 6; i++) k.later(st, () => spawnText(st, '하하하!', 'laugh'), 400 + i * 380); }
         }
       };
-      if (play) k.later(st, run, afterMs + 500); else run();
+      if (play) { k.later(st, run, afterMs + 500); if (status === 'defeat') bossAtkEnd = Math.max(bossAtkEnd, Date.now() + afterMs + 500 + 4800); } else run();
     }
     // 끝 카드: 처치 수
     const ended = status !== 'fighting' || (v && v.phase === 'finished');

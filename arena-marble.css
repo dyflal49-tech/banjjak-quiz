@@ -96,3 +96,10 @@
 .ar-mb-prace.win{box-shadow:0 0 0 4px #ffd43b,0 0 30px rgba(255,212,59,.6)}
 @media (max-width:640px){.ar-mb-race{flex-direction:column}.ar-mb-side{flex:0 0 auto;max-height:120px}}
 @media (prefers-reduced-motion:reduce){.ar-mb-dot.pop,.ar-mb-jar.grow .ar-mb-glass,.ar-mb-banner.show,.ar-mb-stage.tense,.ar-mb-rrow,.ar-mb-rpod,.ar-mb-cd.go b{animation:none}.ar-mb-banner.show{opacity:1;transform:translate(-50%,-50%)}}
+
+/* v12: 다음 구슬까지 진행도, 역전 리프트 배너 */
+.ar-mb-prog{display:flex;align-items:center;gap:4px;font-size:12px;font-weight:800}
+.ar-mb-prog b{margin-left:4px;color:#ffe066}
+.ar-mb-pp{display:inline-block;width:12px;height:12px;border-radius:50%;background:rgba(255,255,255,.2);box-shadow:inset 0 1px 3px rgba(0,0,0,.4)}
+.ar-mb-pp.on{background:#ffd43b;box-shadow:0 0 6px rgba(255,212,59,.8)}
+.ar-mb-banner.lift{background:linear-gradient(90deg,#f59f00,#ffd43b);color:#3b1d72;border:3px solid #fff}

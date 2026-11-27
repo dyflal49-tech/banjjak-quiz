@@ -125,6 +125,17 @@
       if (!catching && t - st.popAt > 140 && !w.done) { st.popAt = t; snd('pop'); }
     }
     for (const b of w.bodies) if (!b.finished) b.lastX = b.x;
+    // v12: 역전 리프트가 구슬을 들어 올릴 때 배너
+    const le = w.liftEvents || [];
+    if (le.length > (st.seenLift || 0)) {
+      const ev = le[le.length - 1]; st.seenLift = le.length;
+      if (!catching) {
+        const names = [...new Set(ev.ids.map(id => { const inf = st.info.get(S(id)); return inf ? S(inf.nickname) : ''; }).filter(Boolean))];
+        st.banner.textContent = '역전 리프트! ' + names.join(', ');
+        st.banner.classList.add('lift'); K().replay(st.banner, 'show'); snd('levelup');
+        setTimeout(() => { if (!st.dead) st.banner.classList.remove('lift'); }, 2600);
+      }
+    }
     camera(st);
     draw(st);
     if (t - (st.rankAt || 0) > 250) { st.rankAt = t; ranking(st); }
@@ -182,6 +193,21 @@
       for (let a = 0; a < r.arms; a++) { const ang = base + a * Math.PI * 2 / r.arms; ctx.beginPath(); ctx.moveTo(r.cx, r.cy); ctx.lineTo(r.cx + Math.cos(ang) * r.len, r.cy + Math.sin(ang) * r.len); ctx.stroke(); }
       ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(r.cx, r.cy, 8, 0, Math.PI * 2); ctx.fill();
     }
+    for (const s of (w.lifts || [])) {
+      const L = s.L, x0 = L.x, half = L.w / 2, topY = L.y - L.rise - 24;
+      if (L.y + 20 < top || topY > top + viewH) continue;
+      ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 5;
+      ctx.beginPath(); ctx.moveTo(x0 - half - 8, topY); ctx.lineTo(x0 - half - 8, L.y + 12); ctx.moveTo(x0 + half + 8, topY); ctx.lineTo(x0 + half + 8, L.y + 12); ctx.stroke();
+      for (let yy = topY + 14; yy < L.y + 10; yy += 18) { ctx.beginPath(); ctx.moveTo(x0 - half - 13, yy); ctx.lineTo(x0 - half - 3, yy); ctx.moveTo(x0 + half + 3, yy); ctx.lineTo(x0 + half + 13, yy); ctx.stroke(); }
+      const busy = s.carry.length > 0;
+      if (busy) { ctx.fillStyle = 'rgba(255,212,59,.35)'; ctx.fillRect(x0 - half - 6, s.py - 34, L.w + 12, 34); }
+      ctx.fillStyle = busy ? '#ffd43b' : '#ced4da'; ctx.fillRect(x0 - half, s.py - 4, L.w, 9);
+      ctx.fillStyle = '#495057'; ctx.fillRect(x0 - half, s.py + 5, L.w, 3);
+      ctx.font = 'bold 15px system-ui,sans-serif'; ctx.textAlign = 'center';
+      const tag = '역전 리프트', tw = ctx.measureText(tag).width + 16;
+      ctx.fillStyle = '#f59f00'; ctx.fillRect(x0 - tw / 2, L.y + 16, tw, 22); ctx.fillStyle = '#fff'; ctx.fillText(tag, x0, L.y + 32);
+      if (s.state === 'hold' && ((w.t * 4) | 0) % 2 === 0) { ctx.font = 'bold 24px system-ui,sans-serif'; ctx.fillStyle = '#ffe066'; ctx.strokeStyle = '#3b1d72'; ctx.lineWidth = 5; ctx.strokeText('버텨라!', x0 + half + 70, s.py - 10); ctx.fillText('버텨라!', x0 + half + 70, s.py - 10); }
+    }
     const fy = m.finishY;
     if (fy > top - 30 && fy < top + viewH + 30) {
       for (let x = 0; x < m.w; x += 20) { const odd = ((x / 20) | 0) % 2; ctx.fillStyle = odd ? '#fff' : '#222'; ctx.fillRect(x, fy - 6, 20, 6); ctx.fillStyle = odd ? '#222' : '#fff'; ctx.fillRect(x, fy, 20, 6); }
@@ -199,9 +225,21 @@
       ctx.lineWidth = 1.5; ctx.strokeStyle = b.gold ? '#fff3bf' : col; ctx.stroke();
       if (!b.finished) active.push(b);
     }
-    if (nAct && nAct <= 24) {
-      ctx.font = 'bold ' + Math.round(13 / c.z + 2) + 'px system-ui,sans-serif'; ctx.textAlign = 'center';
-      for (const b of active) { const inf = st.info.get(b.id); const nm = inf ? S(inf.nickname) : ''; const tw = ctx.measureText(nm).width + 10; ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(b.x - tw / 2, b.y - b.r - 24, tw, 17); ctx.fillStyle = '#fff'; ctx.fillText(nm, b.x, b.y - b.r - 11); }
+    // v12: 보이는 모든 구슬 위에 닉네임 (많으면 작게), 리프트에 탄 구슬은 크게 강조
+    if (nAct) {
+      const fs0 = (nAct > 60 ? 10.5 : nAct > 24 ? 12 : 14) / Math.max(1, c.z * 0.85);
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      const sorted = active.slice().sort((a, b) => (a.lift >= 0) - (b.lift >= 0));
+      for (const b of sorted) {
+        const inf = st.info.get(b.id); const nm = inf ? S(inf.nickname) : ''; if (!nm) continue;
+        const up = b.lift >= 0, fsz = up ? fs0 * 1.45 : fs0;
+        ctx.font = 'bold ' + fsz.toFixed(1) + 'px system-ui,sans-serif';
+        const tw = ctx.measureText(nm).width + fsz * 0.8, th2 = fsz * 1.35, by = b.y - b.r - th2 / 2 - 3 - (up ? b.slot * th2 * 1.1 : 0);
+        ctx.fillStyle = up ? '#ffd43b' : 'rgba(0,0,0,.62)'; ctx.fillRect(b.x - tw / 2, by - th2 / 2, tw, th2);
+        ctx.lineWidth = up ? 2 : 1.2; ctx.strokeStyle = up ? '#fff' : ownerColor(st, b.id); ctx.strokeRect(b.x - tw / 2, by - th2 / 2, tw, th2);
+        ctx.fillStyle = up ? '#3b1d72' : '#fff'; ctx.fillText(nm, b.x, by + 0.5);
+      }
+      ctx.textBaseline = 'alphabetic';
     }
     const dt = 1 / 60;
     st.parts = st.parts.filter(p => (p.life -= dt) > 0);
@@ -270,10 +308,13 @@
     const k = K();
     const st = k.prep(root, 'ar-mb-pstrip', ['ar-mb', 'ar-mb-pstrip'], (st, r) => {
       st.dots = el('div', 'ar-mb-pdots'); st.n = el('b', null, '0'); st.g = el('span', 'ar-mb-pg', '');
-      const t = el('div', 'ar-mb-ptext'); const l1 = el('div', 'ar-mb-pl1'); l1.append('내 구슬 ', st.n, '개'); t.append(l1, st.g, el('small', null, '마지막 레이스는 늦게 들어올수록 1등! 빨리 맞히면 조금 느린 황금 구슬'));
+      const t = el('div', 'ar-mb-ptext'); const l1 = el('div', 'ar-mb-pl1'); l1.append('내 구슬 ', st.n, '개'); st.prog = el('div', 'ar-mb-prog'); t.append(l1, st.prog, st.g, el('small', null, '정답 3개마다 구슬 1개! 마지막 레이스는 늦게 들어올수록 1등'));
       r.append(st.dots, t); st.last = -1;
     });
     const { m, g, color } = myMarbles(v);
+    const meP = A(msOf(v).players).find(x => meOf(v) && x.id === meOf(v).id); const cor = N(meP ? meP.correct : (meOf(v) || {}).correct);
+    const pr = cor % 3;
+    if (st.lastPr !== pr) { st.lastPr = pr; st.prog.replaceChildren(el('span', null, '다음 구슬까지'), ...[0, 1, 2].map(i => el('i', 'ar-mb-pp' + (i < pr ? ' on' : ''))), el('b', null, `정답 ${3 - pr}개`)); }
     if (m !== st.last) {
       const grew = st.last >= 0 && m > st.last; st.last = m; st.n.textContent = fmt(m); st.g.textContent = g ? `황금 구슬 ${g}개` : '';
       const show = Math.min(m, 18);
@@ -305,19 +346,19 @@
       const left = total - arrived;
       st.sub.textContent = total ? `내 구슬 ${total}개 중` : '이번 레이스에는 내 구슬이 없어요';
       st.big.textContent = total ? (left ? `${left}개 굴러가는 중` : '모두 도착!') : '응원해요!';
-      st.note.textContent = `아직 굴러가는 학생 ${rest.size}명`;
+      st.note.textContent = total ? `아직 굴러가는 학생 ${rest.size}명` : `정답 3개마다 구슬을 받아요 · 굴러가는 학생 ${rest.size}명`;
       st.fill.style.width = (total ? arrived / total * 100 : 100).toFixed(0) + '%';
       if (st.prevLeft !== undefined && left < st.prevLeft) { try { navigator.vibrate && navigator.vibrate(30); } catch { /* 무시 */ } }
       st.prevLeft = left; return;
     }
     if (st.doneShown) return; st.doneShown = true;
-    const o = A(s.order).find(x => x.id === me.id), pl = o ? N(o.place) : 0, b = (s.bonus || {})[pl];
+    // 결과(등수·추가 점수)는 선생님 화면에서만 발표
     st.h.textContent = '레이스 끝!';
-    st.sub.textContent = pl ? '내 레이스 등수' : '';
-    st.big.textContent = pl ? pl + '등' : '수고했어요';
-    st.note.textContent = pl && pl <= 3 && b ? `추가 점수 +${fmt(b)}점!` : '가장 늦게 들어온 구슬이 1등이에요.';
+    st.sub.textContent = '';
+    st.big.textContent = '결과는 선생님 화면에서!';
+    st.note.textContent = '가장 늦게 들어온 구슬이 1등이에요. 큰 화면을 봐요!';
     st.fill.style.width = '100%';
-    if (pl && pl <= 3) { st.root.classList.add('win'); fx('confetti', { count: 120 }); snd('fanfare'); }
+    snd('sparkle');
   }
   function player(root, v) {
     if (!root) return;

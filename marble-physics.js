@@ -11,7 +11,7 @@
   const strHash = s => { let h = 2166136261; s = String(s); for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; };
 
   // ---------- 맵 조립 도구 ----------
-  function newMap() { return { segs: [], pegs: [], rotors: [], y: 60 }; }
+  function newMap() { return { segs: [], pegs: [], rotors: [], lifts: [], y: 60 }; }
   // 지그재그 경사로: 한쪽 벽에 붙어 반대쪽으로 내려가고 끝에 구멍
   function ramps(m, n, slope, opt = {}) {
     const gap = opt.gap || 84, drop = slope * (W - gap), dy = Math.ceil(drop) + (opt.space || 40);
@@ -47,6 +47,13 @@
     const len = opt.len || 64, w = opt.w || 2.2, arms = opt.arms || 2;
     for (let i = 0; i < count; i++) m.rotors.push({ cx: (i + 0.5) * W / count, cy: m.y + len, len, arms, w: (i % 2 ? -1 : 1) * w * (opt.vary ? (1 + 0.15 * (i % 3)) : 1), ph: i * 0.7 });
     m.y += len * 2 + 50;
+  }
+  // v12: 마지막 구간 역전 리프트 - 깔때기 아래 받침이 구슬 몇 개를 들어 올려 버티다가 놓아 줌
+  function liftSection(m) {
+    funnel(m, 116, 200);
+    const y = m.y + 20;
+    m.lifts.push({ x: W / 2, y, w: 116, rise: 220, cap: 3 });
+    m.y = y + 60;
   }
   function bumpers(m, list) { for (const [x, dy, r] of list) m.pegs.push([x, m.y + dy, r || 22, 2]); m.y += Math.max(...list.map(b => b[1])) + 60; }
   function finishMap(m, def) {
@@ -86,7 +93,7 @@
   const cache = new Map();
   function getMap(id) {
     if (!DEFS[id]) id = 'peg';
-    if (!cache.has(id)) { const d = DEFS[id]; const m = newMap(); d.build(m); cache.set(id, finishMap(m, { id: d.id, name: d.name, desc: d.desc, bgm: d.bgm, g: d.g, theme: d.theme, w: W })); }
+    if (!cache.has(id)) { const d = DEFS[id]; const m = newMap(); d.build(m); liftSection(m); cache.set(id, finishMap(m, { id: d.id, name: d.name, desc: d.desc, bgm: d.bgm, g: d.g, theme: d.theme, w: W })); }
     return cache.get(id);
   }
   const MAPS = Object.values(DEFS).map(d => ({ id: d.id, name: d.name, desc: d.desc, bgm: d.bgm }));
@@ -100,16 +107,18 @@
     const idx = list.map((_, i) => i);
     for (let i = idx.length - 1; i > 0; i--) { const j = rr() * (i + 1) | 0; const t = idx[i]; idx[i] = idx[j]; idx[j] = t; }
     const cols = 40, sp = (W - 40) / cols;
-    const bodies = list.map((m, i) => ({ id: m.id, gold: m.gold, r: R, x: 0, y: 0, vx: 0, vy: 0, angle: 0, finished: false, finishT: null, ax: 0, ay: 0, stuck: 0 }));
+    const bodies = list.map((m, i) => ({ id: m.id, gold: m.gold, r: R, x: 0, y: 0, vx: 0, vy: 0, angle: 0, finished: false, finishT: null, ax: 0, ay: 0, stuck: 0, lift: -1, slot: 0, lifted: false }));
     idx.forEach((bi, k) => { const b = bodies[bi]; const row = k / cols | 0, col = k % cols; b.x = 20 + sp * (col + 0.5) + (rr() - 0.5) * 3 + (row % 2) * sp * 0.25; b.y = 30 - row * 16 - rr() * 2; b.ax = b.x; b.ay = b.y; });
     const rows = Math.ceil((map.h + OFF) / CELL) + 2, gcols = Math.ceil(W / CELL) + 2;
     const heads = new Int32Array(rows * gcols).fill(-1), next = new Int32Array(Math.max(1, bodies.length));
     let active = bodies.map((_, i) => i);
     const finishList = [];
-    const world = { map, w: W, h: map.h, t: 0, done: bodies.length === 0, bodies, finishList, steps: 0,
+    const lifts = (map.lifts || []).map(L => ({ L, state: 'wait', t0: 0, py: L.y, carry: [] }));
+    const liftEvents = [];
+    const world = { map, w: W, h: map.h, t: 0, done: bodies.length === 0, bodies, finishList, steps: 0, lifts, liftEvents,
       step() { if (this.done) return; for (let s = 0; s < SUB; s++) sub(); this.steps++; },
       rotorAngle(r, t) { return r.ph + r.w * (t === undefined ? this.t : t); },
-      statics() { return { segs: map.segs, pegs: map.pegs, rotors: map.rotors.map(r => ({ ...r, angle: this.rotorAngle(r) })), finishY: map.finishY }; },
+      statics() { return { segs: map.segs, pegs: map.pegs, rotors: map.rotors.map(r => ({ ...r, angle: this.rotorAngle(r) })), finishY: map.finishY, lifts: lifts.map(s => ({ ...s.L, py: s.py, state: s.state, carry: s.carry.slice() })) }; },
       remaining() { return active.length; } };
 
     function hitSeg(b, x1, y1, x2, y2, svx, svy, e, fr) {
@@ -132,11 +141,40 @@
       if (vn < 0) { const e = kind === 2 ? 1.15 : kind === 1 ? 0.95 : 0.45; const j = -(1 + e) * vn; b.vx += j * nx; b.vy += j * ny; }
       if (kind === 2) { b.vx += nx * 120; b.vy += ny * 120; }
     }
+    const SLOT = [0, -26, 26];
+    const ease = p => p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+    function pin(s) { for (const i of s.carry) { const b = bodies[i]; b.x = s.L.x + SLOT[b.slot]; b.y = s.py - R - 4; b.vx = 0; b.vy = 0; } }
+    function updateLifts(t) {
+      for (let li = 0; li < lifts.length; li++) {
+        const s = lifts[li], L = s.L, el = t - s.t0;
+        if (s.state === 'gather' && (el >= 0.4 || s.carry.length >= L.cap)) { s.state = 'rise'; s.t0 = t; liftEvents.push({ t: Math.round(t * 1000) / 1000, lift: li, ids: s.carry.map(i => bodies[i].id) }); }
+        else if (s.state === 'rise') { const p = Math.min(1, el / 1.0); s.py = L.y - L.rise * ease(p); if (p >= 1) { s.state = 'hold'; s.t0 = t; } }
+        else if (s.state === 'hold' && el >= 1.6) {
+          for (const i of s.carry) { const b = bodies[i]; b.lift = -1; b.lifted = true; b.vx = (b.slot === 1 ? -1 : b.slot === 2 ? 1 : 0) * 40; b.vy = -40; b.ax = b.x; b.ay = b.y; b.stuck = 0; }
+          s.carry = []; s.state = 'down'; s.t0 = t;
+        } else if (s.state === 'down') { const p = Math.min(1, el / 0.9); s.py = L.y - L.rise * (1 - ease(p)); if (p >= 1) { s.py = L.y; s.state = 'cool'; s.t0 = t; } }
+        else if (s.state === 'cool' && el >= 0.6) { s.state = 'wait'; s.t0 = t; }
+        pin(s);
+      }
+    }
+    function tryCatch(b, t) {
+      if (b.lifted || b.lift >= 0 || b.vy < 0) return;
+      for (let li = 0; li < lifts.length; li++) {
+        const s = lifts[li], L = s.L;
+        if ((s.state !== 'wait' && s.state !== 'gather') || s.carry.length >= L.cap) continue;
+        if (Math.abs(b.x - L.x) >= L.w / 2 || b.y < s.py - R - 8 || b.y > s.py + 14) continue;
+        b.lift = li; b.slot = s.carry.length; s.carry.push(bodies.indexOf(b));
+        if (s.state === 'wait') { s.state = 'gather'; s.t0 = t; }
+        pin(s); return;
+      }
+    }
     function sub() {
       const t = world.t, g = map.g, h = map.h;
+      if (lifts.length) updateLifts(t);
       // 이동 + 정적 충돌
       for (let k = 0; k < active.length; k++) {
         const b = bodies[active[k]];
+        if (b.lift >= 0) continue;
         b.vy += g * DT;
         const drag = 1 - (b.gold ? 0.3 : 0.06) * DT; b.vx *= drag; b.vy *= drag;
         const sp2 = b.vx * b.vx + b.vy * b.vy; if (sp2 > VMAX * VMAX) { const f = VMAX / Math.sqrt(sp2); b.vx *= f; b.vy *= f; }
@@ -165,6 +203,7 @@
         if (b.x < b.r) { b.x = b.r; if (b.vx < 0) b.vx = -b.vx * 0.4; }
         else if (b.x > W - b.r) { b.x = W - b.r; if (b.vx > 0) b.vx = -b.vx * 0.4; }
         if (b.y > h - b.r) { b.y = h - b.r; if (b.vy > 0) b.vy = 0; }
+        if (lifts.length) tryCatch(b, t);
       }
       // 구슬끼리 (격자)
       const used = [];
@@ -194,11 +233,13 @@
         }
       }
       for (let q = 0; q < used.length; q++) heads[used[q]] = -1;
+      for (const s of lifts) pin(s);
       world.t += DT;
       // 끼임 풀기 + 결승
       let fin = false;
       for (let k = 0; k < active.length; k++) {
         const b = bodies[active[k]];
+        if (b.lift >= 0) { b.ax = b.x; b.ay = b.y; b.stuck = 0; continue; }
         const mx = b.x - b.ax, my = b.y - b.ay;
         if (mx * mx + my * my > 400) { b.ax = b.x; b.ay = b.y; b.stuck = 0; }
         else if ((b.stuck += DT) > 2) { b.stuck = 0; b.vx += (rr() - 0.5) * 320; b.vy -= 120 + rr() * 160; }
@@ -223,7 +264,7 @@
     const w = create(mapId, marbles, seed);
     while (!w.done) w.step();
     const last = w.finishList.length ? w.finishList[w.finishList.length - 1].t : 0;
-    return { duration: Math.round(Math.max(last, w.t) * 1000) / 1000, finish: w.finishList.slice() };
+    return { duration: Math.round(Math.max(last, w.t) * 1000) / 1000, finish: w.finishList.slice(), lifts: w.liftEvents.slice() };
   }
   window.KQMarble = { MAPS, mapFor, create, simulate, getMap, R, W };
 })();
