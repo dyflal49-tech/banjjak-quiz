@@ -35,7 +35,7 @@
 /* ---------- 학생 패널 공통 ---------- */
 .md-player{width:100%;max-width:440px;margin:0 auto;color:#222;font-size:16px;display:flex;flex-direction:column;gap:10px}
 .md-player.md-empty{display:none}
-.md-player.md-robot{--c:#1368ce}.md-player.md-marble{--c:#0aa3a3}.md-player.md-submarine{--c:#1c7ed6}.md-player.md-tower{--c:#339af0}.md-player.md-treasure{--c:#f5b700}.md-player.md-garden{--c:#40c057}.md-player.md-boss{--c:#864cbf}.md-player.md-kingdom,.md-player.md-space{--c:#46178f}
+.md-player.md-robot{--c:#1368ce}.md-player.md-marble{--c:#0aa3a3}.md-player.md-submarine{--c:#1c7ed6}.md-player.md-treasure{--c:#f5b700}.md-player.md-garden{--c:#40c057}.md-player.md-boss{--c:#864cbf}.md-player.md-kingdom,.md-player.md-space{--c:#46178f}
 .md-card{background:#fff;border-radius:12px;padding:14px 16px;box-shadow:0 3px 0 rgba(0,0,0,.18);text-align:center;border-top:6px solid var(--c,#46178f);display:flex;flex-direction:column;gap:8px;align-items:stretch}
 .md-big{font-size:1.45rem;font-weight:900;line-height:1.2}
 .md-sub{font-size:.92rem;color:#555;font-weight:700}
@@ -208,33 +208,11 @@
 .md-pb-sub{font-size:.8rem;color:#666;font-weight:700}
 .md-pb-en{font-size:.85rem;background:var(--c,#25076b);color:#fff;border-radius:999px;padding:2px 9px;white-space:nowrap}
 
-/* ---------- 7. 하늘 탑 쌓기 ---------- */
-.md-sky{background:linear-gradient(#5fb4f5,#a5d8ff 60%,#d0ebff)}
+/* ---------- 구름·왕관 (꽃밭, 공통 도구) ---------- */
 .md-cloud{position:absolute;left:0;top:var(--cy,10%);width:7em;height:2.2em;background:#fff;border-radius:2em;opacity:.85;animation:md-drift var(--cd,50s) linear infinite;animation-delay:var(--cdl,0s);scale:var(--cs,1)}
 .md-cloud::before{content:"";position:absolute;width:3em;height:3em;border-radius:50%;background:#fff;left:1.1em;top:-1.4em}
 .md-cloud::after{content:"";position:absolute;width:2.3em;height:2.3em;border-radius:50%;background:#fff;left:3.3em;top:-.9em}
-.md-ground{position:absolute;left:0;right:0;bottom:0;height:7%;background:linear-gradient(#69db7c,#2f9e44)}
-.md-tcols{position:absolute;left:2%;right:2%;top:5%;bottom:3%;container-type:size;--n:6;--scale:10}
-.md-tcol{position:absolute;bottom:0;height:100%;left:calc(var(--i,0) * 100% / var(--n));width:calc(100% / var(--n));transition:left .6s ease;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding:0 .2em}
 .md-crown{width:2em;height:1.4em;flex:0 0 auto;visibility:hidden}
-.md-tcol.md-top .md-crown{visibility:visible;animation:md-bob 1.8s ease-in-out infinite}
-.md-theight{font-weight:900;color:#1b3a5c;font-size:.95em;margin-bottom:.15em}
-.md-tcol.md-top .md-theight{color:#c47f00}
-.md-tstack{display:flex;flex-direction:column-reverse;width:min(62%,4.2em)}
-.md-block{height:calc((100cqh - 5.6em) / var(--scale,10));min-height:2px;background:var(--bc,#1368ce);border:max(1px,.07em) solid rgba(0,0,0,.25);border-radius:.18em;box-shadow:inset 0 -.18em 0 rgba(0,0,0,.15),inset 0 .14em 0 rgba(255,255,255,.35)}
-.md-block.md-gold{position:relative;background:linear-gradient(110deg,#f5b700 0 38%,#fff9db 50%,#f5b700 62%);background-size:260% 100%;border-color:#8a5a00;box-shadow:0 0 .45em rgba(255,212,59,.95),inset 0 -.18em 0 rgba(0,0,0,.15);animation:md-shine 2.4s linear infinite;z-index:1}
-.md-block.md-gold::after{content:"";position:absolute;left:50%;top:50%;width:min(70%,1em);aspect-ratio:1;max-height:80%;transform:translate(-50%,-50%);background:#fff;clip-path:polygon(50% 0,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%);opacity:.9}
-.md-block.md-drop{animation:md-drop .45s cubic-bezier(.3,1.4,.5,1)}
-.md-block.md-gold.md-drop{animation:md-drop .45s cubic-bezier(.3,1.4,.5,1),md-shine 2.4s linear .45s infinite}
-.md-tbase{width:min(62%,4.2em);font-size:.7em;background:#495057;color:#fff;text-align:center;border-radius:.2em .2em 0 0;padding:.05em 0}
-.md-tname{font-size:.8em;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#fff;background:rgba(0,0,0,.45);border-radius:999px;padding:.05em .55em;margin-top:.2em}
-.md-sky .md-more{top:.5em;bottom:auto}
-.md-tcol.md-wobble .md-tstack{animation:md-shake .45s ease-in-out}
-.md-tcard .md-prow{justify-content:center;gap:20px}
-.md-mtower{display:flex;flex-direction:column;align-items:center;width:64px;height:150px;justify-content:flex-end}
-.md-mstack{display:flex;flex-direction:column-reverse;width:44px}
-.md-mstack .md-block{height:13px}
-.md-mground{width:64px;height:8px;border-radius:4px;background:#51cf66}
 
 /* ---------- 8. 행운의 보물상자 ---------- */
 .md-treasure-stage{display:flex;gap:1.2em;padding:1em 1.2em;background:radial-gradient(circle at 82% 80%,rgba(255,212,59,.35),transparent 45%),linear-gradient(160deg,#6b2f0f,#2b1240 72%)}

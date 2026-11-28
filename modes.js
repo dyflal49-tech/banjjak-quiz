@@ -716,76 +716,6 @@
     }
   }
 
-  // ---------- 7. 하늘 탑 쌓기 ----------
-  const MAX_TOWERS = 10;
-  function makeTowerCol() {
-    const C = { blocks: [], fresh: true, h0: null };
-    C.h = H('div', { class: 'md-theight' }); C.name = H('div', { class: 'md-tname' });
-    C.stack = H('div', { class: 'md-tstack' }); C.base = H('div', { class: 'md-tbase' });
-    C.node = H('div', { class: 'md-tcol' }, crownSVG(), C.h, C.stack, C.base, C.name);
-    return C;
-  }
-  function towerHost(root, v) {
-    const st = prep(root, 'tower:host', ['md-host', 'md-tower'], (st) => {
-      st.cols = H('div', { class: 'md-tcols' }); st.more = H('div', { class: 'md-more' });
-      st.empty = H('div', { class: 'md-empty-msg md-dark', text: '참가자가 들어오면 탑 자리가 생겨요' });
-      st.stage = H('div', { class: 'md-stage md-sky', role: 'img', 'aria-label': '하늘 탑 쌓기' },
-        cloud('8%', '46s', '-10s', 1), cloud('22%', '60s', '-35s', 0.7), cloud('14%', '52s', '-22s', 1.2), cloud('34%', '70s', '-50s', 0.8),
-        H('div', { class: 'md-ground' }), st.cols, st.empty, st.more);
-      root.append(st.stage);
-      st.map = new Map();
-    });
-    const s = ms(v);
-    const towers = arr(s.towers).filter(t => t && t.id !== undefined && t.id !== null);
-    const sorted = towers.slice().sort((a, b) => (num(b.height) - num(a.height)) || nameCmp(a, b));
-    const shown = sorted.slice(0, MAX_TOWERS);
-    const maxBlocks = Math.max(10, ...shown.map(t => Math.min(30, arr(t.blocks).length)));
-    css(st.cols, '--n', Math.max(shown.length, 6)); css(st.cols, '--scale', maxBlocks);
-    show(st.empty, shown.length === 0);
-    const seen = new Set();
-    shown.forEach((t, i) => {
-      const key = str(t.id); seen.add(key);
-      let C = st.map.get(key);
-      if (!C) { C = makeTowerCol(); st.map.set(key, C); st.cols.append(C.node); }
-      css(C.node, '--i', i);
-      const blocks = arr(t.blocks).slice(-30);
-      while (C.blocks.length < blocks.length) { const b = H('div', { class: 'md-block' }); if (!C.fresh && !st.first) b.classList.add('md-drop'); C.stack.append(b); C.blocks.push(b); }
-      while (C.blocks.length > blocks.length) C.blocks.pop().remove();
-      blocks.forEach((b, j) => { css(C.blocks[j], '--bc', safeColor(b && b.color) || colorFor(key)); cls(C.blocks[j], 'md-gold', !!(b && b.gold)); });
-      C.fresh = false;
-      const h = Math.max(0, Math.floor(num(t.height)));
-      if (C.h0 !== null && h < C.h0 && !st.first) replay(C.node, 'md-wobble');
-      C.h0 = h;
-      txt(C.h, `${h}층`); txt(C.name, str(t.nickname));
-      cls(C.node, 'md-top', i === 0 && h > 0);
-      const hidden = h - blocks.reduce((n, b) => n + (b && b.gold ? 2 : 1), 0);
-      txt(C.base, hidden > 0 ? `+${hidden}` : ''); show(C.base, hidden > 0);
-    });
-    for (const [k, C] of st.map) if (!seen.has(k)) { C.node.remove(); st.map.delete(k); }
-    const rest = sorted.slice(MAX_TOWERS);
-    txt(st.more, rest.length ? `그 외 ${rest.length}명 · 평균 ${Math.round(rest.reduce((n, t) => n + num(t.height), 0) / rest.length)}층` : '');
-    attr(st.stage, 'aria-label', shown.length ? `하늘 탑 쌓기, 1위 ${str(shown[0].nickname)} ${num(shown[0].height)}층` : '하늘 탑 쌓기 대기');
-  }
-  function towerPlayer(root, v) {
-    const st = prep(root, 'tower:player', ['md-player', 'md-tower'], (st) => {
-      st.stack = H('div', { class: 'md-mstack' }); st.blocks = [];
-      st.h = H('div', { class: 'md-big' }); st.rank = H('div', { class: 'md-sub' }); st.note = H('div', { class: 'md-note', text: '정답 1층, 빨리 맞히면 황금 블록 2층!' });
-      root.append(H('div', { class: 'md-card md-tcard' }, H('div', { class: 'md-prow' }, H('div', { class: 'md-mtower' }, st.stack, H('div', { class: 'md-mground' })), H('div', { class: 'md-pinfo' }, st.h, st.rank)), st.note));
-    });
-    const s = ms(v), me = meOf(v);
-    const towers = arr(s.towers).filter(Boolean);
-    const sorted = towers.slice().sort((a, b) => (num(b.height) - num(a.height)) || nameCmp(a, b));
-    const mine = me ? towers.find(t => str(t.id) === str(me.id)) : null;
-    const blocks = arr(mine && mine.blocks).slice(-10);
-    while (st.blocks.length < blocks.length) { const b = H('div', { class: 'md-block' + (st.first ? '' : ' md-drop') }); st.stack.append(b); st.blocks.push(b); }
-    while (st.blocks.length > blocks.length) st.blocks.pop().remove();
-    blocks.forEach((b, j) => { css(st.blocks[j], '--bc', safeColor(b && b.color) || '#1368ce'); cls(st.blocks[j], 'md-gold', !!(b && b.gold)); });
-    const h = Math.max(0, Math.floor(num(mine && mine.height, num(me && me.score, 0))));
-    const rk = mine ? sorted.indexOf(mine) + 1 : Math.floor(num(me && me.rank, 0));
-    txt(st.h, `${h}층`);
-    txt(st.rank, rk ? `${rk}위 / ${towers.length || num(me && me.playerCount, 0)}명` : '탑 쌓기 준비');
-  }
-
   // ---------- 8. 행운의 보물상자 ----------
   const evKey = e => str(e && e.nickname) + '|' + str(e && e.text);
   function spawnFloat(st, layer, node, life) {
@@ -1000,7 +930,6 @@
     submarine: c => iconBox(c, S('circle', { cx: 50, cy: 14, r: 3, fill: 'none', stroke: '#9be7ff', 'stroke-width': 1.5 }), S('circle', { cx: 55, cy: 8, r: 2, fill: 'none', stroke: '#9be7ff', 'stroke-width': 1.5 }), nest(subSVG(), 5, 18, 54, 31), S('path', { d: 'M4 56 Q16 50 28 56 T52 56 T64 56 V64 H4 Z', fill: '#c2a66b' })),
     kingdom: c => { const cols = ['#e21b3c', '#1368ce', '#d89e00', '#26890c', '#f3f0ff', '#e21b3c', '#1368ce', '#26890c', '#d89e00']; return iconBox(c, ...cols.map((f, i) => S('rect', { x: 8 + (i % 3) * 17, y: 8 + Math.floor(i / 3) * 17, width: 14, height: 14, rx: 2.5, fill: f }))); },
     space: c => iconBox(c, S('circle', { cx: 12, cy: 12, r: 1.5, fill: '#fff' }), S('circle', { cx: 52, cy: 10, r: 1.2, fill: '#fff' }), S('circle', { cx: 50, cy: 52, r: 1.5, fill: '#fff' }), S('circle', { cx: 10, cy: 48, r: 1, fill: '#fff' }), S('circle', { cx: 32, cy: 33, r: 13, fill: '#ffa94d' }), S('circle', { cx: 27, cy: 28, r: 4, fill: '#fff', opacity: 0.4 }), S('ellipse', { cx: 32, cy: 33, rx: 24, ry: 7, fill: 'none', stroke: '#ffd43b', 'stroke-width': 3, transform: 'rotate(-18 32 33)' })),
-    tower: c => iconBox(c, S('rect', { x: 0, y: 56, width: 64, height: 8, fill: '#51cf66' }), S('rect', { x: 20, y: 44, width: 24, height: 12, rx: 2, fill: '#e21b3c', stroke: 'rgba(0,0,0,.3)' }), S('rect', { x: 20, y: 32, width: 24, height: 12, rx: 2, fill: '#1368ce', stroke: 'rgba(0,0,0,.3)' }), S('rect', { x: 20, y: 20, width: 24, height: 12, rx: 2, fill: '#26890c', stroke: 'rgba(0,0,0,.3)' }), S('rect', { x: 20, y: 8, width: 24, height: 12, rx: 2, fill: '#ffd43b', stroke: '#b07d00' })),
     runner: c => iconBox(c, S('path', { d: 'M8 60 L26 14 H38 L56 60 Z', fill: '#ffd8a8' }), S('path', { d: 'M32 14 V60', stroke: '#fff', 'stroke-width': 2, 'stroke-dasharray': '4 4' }), S('rect', { x: 14, y: 6, width: 36, height: 10, rx: 3, fill: '#fff' }), S('rect', { x: 18, y: 40, width: 12, height: 5, rx: 2, fill: '#e21b3c' }), S('circle', { cx: 38, cy: 50, r: 6, fill: '#1368ce', stroke: '#fff', 'stroke-width': 2 })),
     treasure: c => iconBox(c, nest(chestSVG('md-open'), 7, 10, 50, 44)),
     garden: c => iconBox(c, S('rect', { x: 0, y: 50, width: 64, height: 14, fill: '#51cf66' }), nest(flowerSVG(3), 6, 10, 28, 44), nest(flowerSVG(2), 30, 4, 30, 50)),

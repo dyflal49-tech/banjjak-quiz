@@ -770,15 +770,11 @@ function playerAnswer(g, p, q, ev, elapsed, meta) {
     if (hits) { points -= hits * 20; message += ` 장애물 ${hits}번 충돌 -${hits * 20}점`; }
     if (coins && ev.correct) message += ` 코인 ${coins}개!`;
     p.score = Math.max(0, p.score + points); p.reachedAt = now();
-  } else if (g.mode === 'tower') {
-    if (ev.correct) { const gold = elapsed <= q.timeLimit * 1000 / 3; const block = { color: MARBLE_COLORS[crypto.randomInt(MARBLE_COLORS.length)], gold, value: gold ? 2 : 1 }; p.blocks.push(block); p.height += block.value; points = block.value; message = gold ? '황금 블록! 2층 쌓았어요.' : '블록 한 층 쌓았어요.'; if (gold && p.streak % 3 === 0) addFeed(g, p.nickname, '황금 블록 연속!'); }
-    else { const top = p.blocks.pop(); if (top) { p.height -= top.value; message = '블록이 하나 무너졌어요.'; } else message = '아쉬워요! 다시 도전!'; }
-    p.score = p.height; p.reachedAt = now();
   } else if (g.mode === 'treasure') {
     if (ev.correct) { const golden = p.streak >= 3 && p.streak % 3 === 0; p.actions = { kind: 'chest', remaining: 1, golden }; message = golden ? `연속 ${p.streak}번 정답! 황금 상자가 나타났어요!` : '정답! 보물상자를 하나 골라요.'; if (golden) addFeed(g, p.nickname, '황금 상자 등장!'); }
     else { p.lockedUntil = now() + 3000; message = '아쉬워요! 3초 쉬고 다음 문제로 상자에 도전해요.'; }
   }
-  if (g.mode !== 'tower' && points > 0) p.reachedAt = now();
+  if (points > 0) p.reachedAt = now();
   g.resultSeq++;
   p.result = { seq: g.resultSeq, correct: ev.correct, points, streak: p.streak, lostStreak, answerText: answerText(q), message, prevRank: p.lastRank ?? null };
   if (g.mode !== 'treasure' || !ev.correct) nextPersonalQuestion(g, p); else p.currentQ = null;
@@ -942,7 +938,6 @@ function modeStateView(g) {
   if (ms.kind === 'tower') return { kind: 'tower', bonusEvery: ms.bonusEvery, towers: ms.towers, drops: ms.drops, teams: teamSummary(g), builders: list.slice(0, 60).map(lite), awards: ms.awards };
   if (g.mode === 'robot') return { goal: ms.goal, racers: list.map(p => ({ id: p.id, nickname: p.nickname, pos: p.pos, finishedRank: p.finishedRank, turbo: p.turbo, repairing: !!(p.lockedUntil && p.lockedUntil > now()) })) };
   if (g.mode === 'marble') return { goal: ms.goal, marbles: list.map(p => ({ id: p.id, nickname: p.nickname, dist: p.dist, color: p.color, finishedRank: p.finishedRank, lastBoost: p.lastBoost })) };
-  if (g.mode === 'tower') return { towers: list.map(p => ({ id: p.id, nickname: p.nickname, height: p.height, blocks: p.blocks.slice(-30).map(b => ({ color: b.color, gold: b.gold })) })) };
   if (g.mode === 'treasure') return { kind: 'treasure', players: list.slice(0, 60).map(p => ({ id: p.id, nickname: p.nickname, avatar: p.avatar || null, gold: p.score, streak: p.streak, chests: stv(p, 'chests') })), events: ms.events, awards: ms.awards || [] };
   if (g.mode === 'kingdom') return { cols: ms.cols, rows: ms.rows, tiles: ms.tiles, teams: teamSummary(g) };
   if (g.mode === 'space') return { planets: ms.planets, teams: teamSummary(g) };
