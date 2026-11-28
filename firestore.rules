@@ -162,9 +162,9 @@ service cloud.firestore {
           && (!('nickname' in request.resource.data) || str(request.resource.data.nickname, 15))
           && (!('rejoin' in request.resource.data) || str(request.resource.data.rejoin, 64))
           && (!('questionId' in request.resource.data) || str(request.resource.data.questionId, 64))
-          && (!('kind' in request.resource.data) || str(request.resource.data.kind, 20))
-          // 게임 문서가 있는(진행 중인) PIN 으로만 보낼 수 있음
-          && exists(/databases/$(database)/documents/kq_games/$(pin));
+          && (!('kind' in request.resource.data) || str(request.resource.data.kind, 20));
+        // 게임이 있는지 확인(exists)은 일부러 넣지 않았어요. 학생 행동마다 Firestore 읽기가
+        // 1번씩 더 생겨 무료 사용량을 빨리 쓰게 되기 때문이에요. 없는 PIN 으로 온 요청은 아무도 처리하지 않아요.
 
         // [한계] 같은 학생이 요청을 아주 많이 보내는 것(도배)은 규칙으로 막기 어려워요.
         //        answer/target/avatar 의 내용 검사는 진행자 엔진이 계속 맡습니다.
