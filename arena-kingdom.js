@@ -2,7 +2,7 @@
 /* 반짝퀴즈 컬러 킹덤 (카훗 컬러 킹덤 스타일) 렌더러
    - 진행자: 풀밭 위 육각형 지도(odd-r, 뾰족한 위), 성 탑과 팀 깃발, 팀 패널(방패/이름/구성원/칸 수/%), 영토 비율 막대, 실시간 해설
    - 학생: 평소엔 작은 상태 띠, actions.kind==='flags' 이면 지도에서 깃발 꽂을 칸 고르기
-   계약: ARENA-CONTRACT.md */
+   계약: docs/contract-v4.md */
 (() => {
   const KQ = window.KQ || (window.KQ = {});
   KQ.arena = KQ.arena || {};

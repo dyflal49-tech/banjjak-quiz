@@ -1,4 +1,4 @@
-# 반짝퀴즈 v7 계약 (v5/ARENA-CONTRACT 규칙 그대로 + 아래)
+# 반짝퀴즈 v7 계약 (contract-v4.md, contract-v5.md 규칙 그대로 + 아래)
 부모 담당: engine.js, backend.js, live.js, modes.js, index.html, 404.html (작업자는 수정 금지, 필요하면 보고). 테스트 출처는 작업자마다 다르게: 마블 https://www.example.com/, 퀴즈 런 https://www.example.net/, 보스 https://example.org/ (부모는 www.example.org).
 
 ## M. 마블 레이스 전면 개편 — 작업자 M: `marble-physics.js`(새 파일), `arena-marble.js/.css`(다시 작성), `fx.js` 트랙 추가

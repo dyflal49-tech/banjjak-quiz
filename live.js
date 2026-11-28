@@ -29,8 +29,8 @@
     { id: 'space', color: '#1d1d5c', name: '우주 정복', pacing: 'player', teams: true, original: false, description: '팀별로 블록을 떨어뜨려 가장 높은 타워를 쌓아요.' },
     { id: 'garden', color: '#2f8f2f', name: '우리반 꽃밭', pacing: 'host', teams: false, original: true, description: '정답마다 꽃이 피어 함께 꽃밭을 채워요.' },
     { id: 'boss', color: '#7a1fa2', name: '보스 레이드', pacing: 'host', teams: false, original: true, description: '모두의 정답으로 거대한 보스를 물리쳐요.' },
-    { id: 'robot', color: '#0aa3a3', name: '로봇 경주', pacing: 'player', teams: false, original: false, description: '각자 문제를 풀며 로봇을 결승선까지 달리게 해요.' },
-    { id: 'marble', color: '#c2410c', name: '마블 레이스', pacing: 'host', teams: false, original: false, description: '정답을 맞힐수록 구슬이 빠르게 굴러가요.' },
+    { id: 'robot', color: '#0aa3a3', name: '로봇 경주', pacing: 'player', teams: false, original: false, description: '반 전체가 한 팀! 로봇에게서 도망치며 협동 미니게임을 해요.' },
+    { id: 'marble', color: '#c2410c', name: '마블 레이스', pacing: 'host', teams: false, original: false, description: '정답 3개마다 구슬을 모아 마지막 레이스! 가장 늦게 들어온 구슬이 1등이에요.' },
     { id: 'runner', color: '#ff6b00', name: '퀴즈 런', pacing: 'player', teams: false, original: true, description: '장애물을 피해 달리며 정답 문으로 골인해요.' },
     { id: 'treasure', color: '#b37f00', name: '행운의 보물상자', pacing: 'player', teams: false, original: true, description: '정답을 맞히면 보물상자를 골라 행운을 시험해요.' }
   ];
