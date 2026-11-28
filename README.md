@@ -70,7 +70,8 @@ node tests/check.js
 
 1. 모든 `.js` 파일에 문법 오류가 없는지
 2. `index.html`, `404.html`이 불러오는 파일이 모두 있는지
-3. 마블 레이스 물리
+3. 한글 줄바꿈 규칙이 지켜지는지 (아래 "한글 줄바꿈 규칙" 참고)
+4. 마블 레이스 물리
    - 같은 입력(맵, 구슬, 시드)이면 언제나 똑같은 결과가 나오는지
    - 엔진이 미리 계산한 순위(`simulate`)와 진행 화면에서 굴러가는 구슬(`create` + `step`)의 순위가 같은지. 이게 다르면 화면에서 본 1등과 실제 점수가 어긋납니다.
    - 모든 구슬이 한 번씩 결승에 들어오는지
@@ -83,3 +84,9 @@ node tests/check.js --update
 ```
 
 끝에 `✅ 통과`가 나오면 정상이고, `❌ 실패`가 나오면 위에 무엇이 틀렸는지 적혀 있습니다.
+
+## 한글 줄바꿈 규칙
+
+한글 문장은 **띄어쓰기 자리에서만** 줄을 바꿉니다. ("로그인하세 / 요."처럼 단어 중간에서 끊기지 않게)
+`style.css`의 `body` 한 곳에 `word-break:keep-all; overflow-wrap:break-word`가 있어 모든 화면에 적용됩니다.
+자세한 내용은 [docs/korean-line-break-prd.md](docs/korean-line-break-prd.md), [docs/korean-line-break-trd.md](docs/korean-line-break-trd.md), 지켜야 할 규칙은 [CLAUDE.md](CLAUDE.md)에 있습니다.
