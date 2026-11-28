@@ -1,4 +1,4 @@
-# 반짝퀴즈 v5 렌더러 계약 (ARENA-CONTRACT.md 의 규칙 그대로 + 아래 추가)
+# 반짝퀴즈 v5 렌더러 계약 (contract-v4.md 의 규칙 그대로 + 아래 추가)
 
 engine.js / backend.js / live.js / modes.js 는 부모 담당(이미 수정 완료). 작업자는 자기 파일만 만든다. 다른 파일 수정이 필요하면 최종 보고에 적는다.
 index.html/404.html 등록은 부모가 한다(arena-mission, arena-runner, arena-orig 의 .js/.css).

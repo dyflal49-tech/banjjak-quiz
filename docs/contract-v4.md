@@ -4,7 +4,7 @@
 - `arena-chase.js` + `arena-chase.css` : robot(로봇 경주) + submarine(잠수함 특공대)
 - `arena-marble.js` + `arena-marble.css` : marble(마블 레이스)
 - `arena-kingdom.js` + `arena-kingdom.css` : kingdom(컬러 킹덤)
-- `arena-tower.js` + `arena-tower.css` : space(우주 정복 = 팀 타워 쌓기)
+- `arena-tower.js` + `arena-tower.css` : space(우주 정복 = 팀 타워 쌓기) (지금은 `arena-space.js` + `arena-space.css` 로 이름이 바뀜)
 
 index.html/404.html 에는 부모가 `<link rel="stylesheet" href="arena-*.css">`, `<script src="arena-*.js" defer>` 를 modes.js 다음에 추가한다.
 
