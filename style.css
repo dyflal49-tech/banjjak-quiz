@@ -1,7 +1,8 @@
 :root{--purple:#46178f;--purple-dark:#381272;--purple-deep:#25076b;--red:#e21b3c;--blue:#1368ce;--yellow:#d89e00;--green:#26890c;--ink:#333;--muted:#6b6b6b;--line:#e3e3e3;--bg:#f2f2f2;--radius:8px;--shadow:0 4px 0 rgba(0,0,0,.25);font-family:"Montserrat","Pretendard","Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",system-ui,sans-serif}
 *{box-sizing:border-box}
 html,body{margin:0;min-height:100%}
-body{background:var(--bg);color:var(--ink);font-size:16px;line-height:1.45;-webkit-tap-highlight-color:transparent}
+body{background:var(--bg);color:var(--ink);font-size:16px;line-height:1.45;-webkit-tap-highlight-color:transparent;word-break:keep-all;overflow-wrap:break-word}
+/* 한글 줄바꿈 규칙: 띄어쓰기에서만 줄을 바꾸고, 너무 긴 말만 글자 중간에서 끊는다. 바꾸지 말 것 (CLAUDE.md, docs/korean-line-break-trd.md) */
 body.modal-open{overflow:hidden}
 #app{min-height:100vh;outline:none}
 h1,h2,h3{margin:0 0 .5em;line-height:1.2;font-weight:800}

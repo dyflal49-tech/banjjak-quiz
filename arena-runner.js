@@ -860,11 +860,19 @@
     const w = ctx.measureText(text).width + fs; ctx.fillStyle = col; rr(ctx, x - w / 2, y - fs, w, fs * 1.4, fs * 0.5); ctx.fill();
     ctx.fillStyle = '#fff'; ctx.fillText(text, x, y + fs * 0.12);
   }
+  // 한글 줄바꿈 규칙: 띄어쓰기 자리에서만 줄을 바꾸고, 한 단어가 한 줄보다 길 때만 글자 단위로 나눈다.
   function wrapText(ctx, text, maxW, lines) {
-    const out = []; let cur = '';
-    for (const ch of Array.from(String(text))) { if (ctx.measureText(cur + ch).width > maxW && cur) { out.push(cur); cur = ch; if (out.length >= lines) break; } else cur += ch; }
-    if (out.length < lines && cur) out.push(cur);
-    if (out.length === lines && Array.from(String(text)).length > out.join('').length) out[lines - 1] = out[lines - 1].slice(0, -1) + '…';
+    const src = String(text); const out = []; let cur = '';
+    const fits = s => ctx.measureText(s).width <= maxW;
+    for (const word of src.split(/\s+/).filter(Boolean)) {
+      const next = cur ? cur + ' ' + word : word;
+      if (fits(next)) { cur = next; continue; }
+      if (cur) { out.push(cur); cur = ''; }
+      if (fits(word)) { cur = word; continue; }
+      for (const ch of Array.from(word)) { if (cur && !fits(cur + ch)) { out.push(cur); cur = ch; } else cur += ch; }
+    }
+    if (cur) out.push(cur);
+    if (out.length > lines) { out.length = lines; let last = out[lines - 1]; while (last && !fits(last + '…')) last = Array.from(last).slice(0, -1).join(''); out[lines - 1] = last + '…'; }
     return out;
   }
   function drawGate(st, c, g, t) {

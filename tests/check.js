@@ -7,6 +7,7 @@
    점검 내용
    1. 모든 .js 파일 문법 검사
    2. index.html / 404.html 이 불러오는 파일이 실제로 있는지
+   2-1. 한글 줄바꿈 규칙(띄어쓰기에서만 줄바꿈)이 지켜지는지
    3. 마블 레이스 물리(marble-physics.js)
       - 시드 난수만 쓰는지(Math.random, Date.now 등 금지)
       - 같은 입력이면 항상 같은 결과인지
@@ -40,6 +41,32 @@ for (const html of ['index.html', '404.html']) {
   const refs = [...src.matchAll(/(?:src|href)="([^"]+)"/g)].map(m => m[1]).filter(u => !/^(https?:|data:|#|\/|mailto:)/.test(u));
   for (const r of refs) ok(fs.existsSync(path.join(ROOT, r.split(/[?#]/)[0])), `${html} → ${r} 파일이 없음`);
   console.log(`  ${html}: ${refs.length}개 확인`);
+}
+
+// ---------- 2-1. 한글 줄바꿈 규칙 (docs/korean-line-break-trd.md) ----------
+section('한글 줄바꿈 규칙');
+{
+  const style = fs.readFileSync(path.join(ROOT, 'style.css'), 'utf8');
+  const body = (style.match(/(^|\n)body\{([^}]*)\}/) || [])[2] || '';
+  ok(/word-break:\s*keep-all/.test(body), 'style.css의 body에 word-break:keep-all 이 없음 (한글이 단어 중간에서 줄바뀜)');
+  ok(/overflow-wrap:\s*(break-word|anywhere)/.test(body), 'style.css의 body에 overflow-wrap:break-word 가 없음 (긴 말이 화면 밖으로 나갈 수 있음)');
+  const cssFiles = fs.readdirSync(ROOT).filter(f => f.endsWith('.css'));
+  for (const f of cssFiles) {
+    const src = fs.readFileSync(path.join(ROOT, f), 'utf8');
+    ok(!/word-break:\s*(normal|break-all)/.test(src), `${f}: word-break:normal/break-all 이 있음 (한글이 글자 단위로 끊김)`);
+  }
+  // 퀴즈 런 정답 문 글자(canvas)는 띄어쓰기 단위로 나눠야 함
+  const runner = fs.readFileSync(path.join(ROOT, 'arena-runner.js'), 'utf8');
+  const m = runner.match(/function wrapText\(ctx, text, maxW, lines\) \{[\s\S]*?\n  \}\n/);
+  if (ok(m, 'arena-runner.js 에서 wrapText 를 찾지 못함')) {
+    const wrapText = vm.runInNewContext('(' + m[0] + ')');
+    const ctx = { measureText: s => ({ width: Array.from(s).length }) }; // 글자 1개 = 폭 1
+    const r = wrapText(ctx, '선생님 비밀번호로 로그인하세요', 8, 3);
+    ok(JSON.stringify(r) === JSON.stringify(['선생님', '비밀번호로', '로그인하세요']), `퀴즈 런 문 글자가 단어 중간에서 끊김: ${JSON.stringify(r)}`);
+    const long = wrapText(ctx, '가나다라마바사아자차카타', 5, 2);
+    ok(long.length === 2 && long.every(l => Array.from(l).length <= 5) && long[1].endsWith('…'), `띄어쓰기 없는 긴 말 처리 이상: ${JSON.stringify(long)}`);
+  }
+  console.log(`  CSS ${cssFiles.length}개 확인`);
 }
 
 // ---------- 3. 마블 물리 ----------
