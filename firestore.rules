@@ -4,14 +4,11 @@ rules_version = '2';
 // 반짝퀴즈 Firestore 보안 규칙 초안
 // =====================================================================
 // 이 파일은 backend.js 가 Firestore 를 쓰는 방식을 읽고 만든 "초안"입니다.
-// 지금 Firebase 콘솔에 걸려 있는 규칙은 저장소에 없어서 비교하지 못했어요.
-// [추측] 이라고 적힌 곳은 코드만 보고 짐작한 부분이니 콘솔 규칙과 맞춰 보세요.
+// [추측] 이라고 적힌 곳은 코드만 보고 짐작한 부분이에요.
 //
-// ⚠️ 중요: Firebase 프로젝트(claude-padlet)를 "우리반 보드"와 같이 씁니다.
-//    Firestore 규칙은 프로젝트 전체에 하나뿐이라, 이 파일을 그대로 배포하면
-//    우리반 보드 컬렉션 규칙이 사라져 보드가 멈춥니다(기본은 모두 거부).
-//    배포할 때는 아래 "우리반 보드 규칙" 자리에 지금 콘솔 규칙을 붙여 넣어
-//    한 파일로 합친 뒤 올리세요.
+// Firebase 프로젝트(claude-padlet)를 "우리반 보드"와 같이 씁니다.
+// Firestore 규칙은 프로젝트에 하나뿐이라, 이 파일 맨 아래에 우리반 보드 규칙도
+// 2026-11-28 콘솔에 있던 그대로 들어 있어요. 이 파일 전체가 콘솔에 들어갈 내용입니다.
 //
 // 지키려는 것
 //  1. 학생(익명 로그인)은 자기 uid 로만 답·참가·행동을 보낼 수 있다
@@ -30,14 +27,11 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // backend.js 의 TEACHER_EMAIL, isTeacher() 와 같은 기준.
-    // [추측] 선생님 계정이 이메일/비밀번호 로그인이라고 보고 provider 를 'password' 로 묶었어요.
-    //        email_verified 는 요구하지 않았습니다(확인 안 된 계정일 수 있어서).
-    //        더 단단하게 하려면 이메일 대신 선생님 계정 uid 로 바꾸세요.
+    // 선생님 = 이 이메일로 로그인한 계정. 지금 콘솔 규칙과 똑같은 기준이에요
+    // (우리반 보드도 이 함수를 같이 쓰므로 로그인 방식 조건은 넣지 않았어요).
+    // 익명 학생 계정에는 이메일이 없어서 선생님으로 통과할 수 없어요.
     function isTeacher() {
-      return signedIn()
-        && request.auth.token.firebase.sign_in_provider == 'password'
-        && request.auth.token.email == 'dyflal49@gmail.com';
+      return request.auth != null && request.auth.token.email == 'dyflal49@gmail.com';
     }
 
     function isSelf(u) {
@@ -171,9 +165,31 @@ service cloud.firestore {
       }
     }
 
-    // ---------- 우리반 보드 규칙 ----------
-    // [추측] 같은 프로젝트를 쓰는 우리반 보드(claude-padlet)의 규칙이 여기에 들어가야 합니다.
-    //        지금 콘솔에 있는 보드용 match 블록을 이 자리에 붙여 넣으세요.
-    //        그 전에는 이 파일 단독 배포 금지.
+    // ---------- 우리반 보드 규칙 (2026-11-28 콘솔 규칙 그대로) ----------
+    match /boards/{boardId} {
+      allow get: if true;
+      allow list: if isTeacher();
+      allow create, update, delete: if isTeacher();
+      match /posts/{postId} {
+        allow read: if true;
+        allow create: if exists(/databases/$(database)/documents/boards/$(boardId));
+        allow update, delete: if true;
+      }
+    }
+    match /codes/{code} {
+      allow get: if true;
+      allow list: if isTeacher();
+      allow create, update, delete: if isTeacher();
+    }
+
+    // ===== 우리반 보드 첨부 파일 (선생님만 올림, 누구나 내려받기) =====
+    match /files/{fileId} {
+      allow get: if true;
+      allow list, write: if isTeacher();
+      match /chunks/{n} {
+        allow get: if true;
+        allow write: if isTeacher();
+      }
+    }
   }
 }
